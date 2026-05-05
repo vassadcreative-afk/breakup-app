@@ -26,9 +26,9 @@ function useResponsive() {
     window.addEventListener("resize", fn);
     return () => window.removeEventListener("resize", fn);
   }, []);
-  const isSm = w < 375;   // iPhone SE / very small
-  const isMd = w < 430;   // iPhone standard
-  const isLg = w >= 430;  // iPhone Pro Max / tablets
+  const isSm = w < 375;
+  const isMd = w < 430;
+  const isLg = w >= 430;
   const px   = isSm ? "0.85rem" : isMd ? "1rem" : "1.25rem";
   const py   = isSm ? "1rem"    : "1.5rem";
   const hero = isSm ? 28        : isMd ? 32 : 36;
@@ -65,7 +65,40 @@ const CATEGORIES = [
   { id: "outros",      label: "Outros",      icon: "O", bar: "#999",     pill: { bg: "#F5F5F5", color: "#666",   border: "#ddd" } },
 ];
 
-// ─── SVG Icons (monochromatic filled) ────────────────────────────────────────
+// ─── Dívidas Nubank ───────────────────────────────────────────────────────────
+const NUBANK_INVOICES = [
+  { id: "jun",  label: "Junho",     value: 1249.83 },
+  { id: "jul",  label: "Julho",     value: 1162.39 },
+  { id: "ago",  label: "Agosto",    value: 1162.39 },
+  { id: "set",  label: "Setembro",  value: 313.19  },
+  { id: "out",  label: "Outubro",   value: 313.19  },
+  { id: "nov",  label: "Novembro",  value: 313.19  },
+  { id: "dez",  label: "Dezembro",  value: 313.19  },
+  { id: "jan",  label: "Janeiro",   value: 313.19  },
+];
+const TOTAL_DEBT_INITIAL = NUBANK_INVOICES.reduce((a, i) => a + i.value, 0);
+
+// ─── Semanas ──────────────────────────────────────────────────────────────────
+const WEEKS = [
+  { id: "s1", label: "Semana 1" },
+  { id: "s2", label: "Semana 2" },
+  { id: "s3", label: "Semana 3" },
+  { id: "s4", label: "Semana 4" },
+];
+
+function initWeeks() {
+  const weeks = {};
+  WEEKS.forEach(w => {
+    weeks[w.id] = { alloc: {}, spent: {} };
+    CATEGORIES.forEach(c => {
+      weeks[w.id].alloc[c.id] = 0;
+      weeks[w.id].spent[c.id] = 0;
+    });
+  });
+  return weeks;
+}
+
+// ─── SVG Icons ────────────────────────────────────────────────────────────────
 const Icons = {
   card: (c = T.bg) => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -110,16 +143,11 @@ const Icons = {
       <circle cx="12" cy="13" r="2" fill={c === T.bg ? T.dark : T.bg} opacity="0.7"/>
     </svg>
   ),
-  heart: (c = T.bg) => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-      <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" fill={c}/>
-    </svg>
-  ),
-  broken: (c = T.bg) => (
+  scissors: (c = T.bg) => (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" fill={c} opacity="0.3"/>
-      <path d="M12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23" stroke={c} strokeWidth="1.5"/>
-      <path d="M10 11l2-4 2 6 2-3" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx="6" cy="6" r="3" stroke={c} strokeWidth="2" fill="none"/>
+      <circle cx="6" cy="18" r="3" stroke={c} strokeWidth="2" fill="none"/>
+      <path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12" stroke={c} strokeWidth="2" strokeLinecap="round"/>
     </svg>
   ),
   star: (c = T.gold) => (
@@ -139,11 +167,11 @@ const Icons = {
       <path d="M12 9v4M12 17h.01" stroke={T.bg} strokeWidth="2" strokeLinecap="round"/>
     </svg>
   ),
-  scissors: (c = T.bg) => (
+  broken: (c = T.bg) => (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <circle cx="6" cy="6" r="3" stroke={c} strokeWidth="2" fill="none"/>
-      <circle cx="6" cy="18" r="3" stroke={c} strokeWidth="2" fill="none"/>
-      <path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12" stroke={c} strokeWidth="2" strokeLinecap="round"/>
+      <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" fill={c} opacity="0.3"/>
+      <path d="M12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23" stroke={c} strokeWidth="1.5"/>
+      <path d="M10 11l2-4 2 6 2-3" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   ),
   fire: (c = T.gold) => (
@@ -151,9 +179,21 @@ const Icons = {
       <path d="M12 23c-4.97 0-9-3.58-9-8 0-3.09 2.04-5.85 5-7.32C8 9 8 10.5 9 11.5c1-2.5.5-5.5 2-8 2 2 3.5 4.5 3.5 7 .5-1 .5-2.5 1.5-3.5 1.5 2 2 4.5 1.5 7 .97.5 1.5 1.5 1.5 2.5 0 2.76-3.13 5-7 5z"/>
     </svg>
   ),
+  nubank: (c = "#8A05BE") => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <rect x="2" y="2" width="20" height="20" rx="6" fill={c}/>
+      <path d="M7 8l5 8 5-8" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+    </svg>
+  ),
+  calendar: (c = T.bg) => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <rect x="3" y="4" width="18" height="18" rx="3" fill={c}/>
+      <path d="M3 9h18M8 2v4M16 2v4" stroke={c === T.bg ? T.dark : T.bg} strokeWidth="2" strokeLinecap="round"/>
+      <rect x="7" y="13" width="3" height="3" rx="1" fill={c === T.bg ? T.dark : T.bg} opacity="0.5"/>
+    </svg>
+  ),
 };
 
-// Ícone de categoria como SVG
 const CatIcons = {
   comida: (c) => <svg width="18" height="18" viewBox="0 0 24 24" fill={c}><path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><path d="M6 1v3M10 1v3M14 1v3" stroke={c} strokeWidth="2" strokeLinecap="round" fill="none"/></svg>,
   transporte: (c) => <svg width="18" height="18" viewBox="0 0 24 24" fill={c}><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8zM5.5 21a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM18.5 21a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg>,
@@ -164,12 +204,22 @@ const CatIcons = {
 };
 
 // ─── Storage ─────────────────────────────────────────────────────────────────
-const STORAGE_KEY = "breakup_data_v1";
+const STORAGE_KEY = "breakup_data_v3";
 const PATTERNS_KEY = "breakup_patterns_v1";
+const DEBT_KEY = "breakup_debt_v1";
+
 function loadStorage() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch { return {}; } }
 function saveStorage(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
 function loadPatterns() { try { return JSON.parse(localStorage.getItem(PATTERNS_KEY) || "{}"); } catch { return {}; } }
 function savePatterns(p) { localStorage.setItem(PATTERNS_KEY, JSON.stringify(p)); }
+function loadDebt() {
+  try {
+    const d = JSON.parse(localStorage.getItem(DEBT_KEY));
+    if (d && typeof d.paidIds !== "undefined") return d;
+  } catch {}
+  return { paidIds: [] };
+}
+function saveDebt(d) { localStorage.setItem(DEBT_KEY, JSON.stringify(d)); }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function monthKey(date = new Date()) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`; }
@@ -184,141 +234,22 @@ function monthLabelShort(key) {
 function initMonth(income = {}) {
   const alloc = {};
   CATEGORIES.forEach(c => alloc[c.id] = 0);
-  return { income, alloc, spent: {}, receipts: [], closed: false };
+  return { income, weeks: initWeeks(), receipts: [], closed: false };
 }
 function totalIncome(inc) { return (inc.salary || 0) + (inc.vr || 0) + (inc.vt || 0) + (inc.extras || []).reduce((a, e) => a + (e.value || 0), 0); }
-function totalAlloc(alloc) { return Object.values(alloc).reduce((a, v) => a + v, 0); }
-function totalSpent(spent) { return Object.values(spent).reduce((a, v) => a + (v || 0), 0); }
+function totalWeekSpent(weekData) {
+  if (!weekData?.spent) return 0;
+  return Object.values(weekData.spent).reduce((a, v) => a + (v || 0), 0);
+}
+function totalMonthSpent(weeks) {
+  if (!weeks) return 0;
+  return Object.values(weeks).reduce((a, w) => a + totalWeekSpent(w), 0);
+}
 const fmt = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtShort = (v) => {
   if (Math.abs(v) >= 1000) return `R$${(v / 1000).toFixed(1)}k`;
   return fmt(v);
 };
-
-// ─── Claude API ───────────────────────────────────────────────────────────────
-async function analyzeReceipt(base64, mimeType, patterns) {
-  const patternHint = Object.keys(patterns).length
-    ? `Padrões conhecidos: ${JSON.stringify(patterns)}`
-    : "";
-  const prompt = `Você é um assistente financeiro. Analise este comprovante e extraia as informações.
-Categorias: comida, transporte, contas, lazer, saude, outros.
-${patternHint}
-Responda APENAS em JSON válido, sem markdown:
-{"estabelecimento":"nome","valor":0.00,"data":"DD/MM/AAAA ou null","categoria":"categoria","confianca":0,"motivo":"razão breve"}`;
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
-      messages: [{ role: "user", content: [
-        { type: "image", source: { type: "base64", media_type: mimeType, data: base64 } },
-        { type: "text", text: prompt }
-      ]}]
-    })
-  });
-  const data = await res.json();
-  const text = data.content?.map(b => b.text || "").join("") || "";
-  return JSON.parse(text.replace(/```json|```/g, "").trim());
-}
-
-function generateLocalReport(monthData, key) {
-  const inc = totalIncome(monthData.income);
-  const spent = totalSpent(monthData.spent);
-  const saved = inc - spent;
-  const pct = inc > 0 ? (spent / inc) * 100 : 0;
-  const score = Math.max(0, Math.min(100, Math.round(100 - pct * 0.8)));
-
-  const catRanking = [...CATEGORIES]
-    .map(c => ({ ...c, spent: monthData.spent[c.id] || 0, budget: monthData.alloc[c.id] || 0 }))
-    .filter(c => c.spent > 0)
-    .sort((a, b) => b.spent - a.spent);
-
-  const top = catRanking[0];
-  const overBudgetCats = catRanking.filter(c => c.budget > 0 && c.spent > c.budget);
-
-  const titles = saved >= 0
-    ? ["Mês encerrado, cartão sobreviveu 💪", "Guardou mais do que gastou, parabéns", "O término foi um sucesso este mês"]
-    : ["Ops, o cartão venceu dessa vez", "Estouro registrado, vamos refletir", "O cartão saiu na frente este mês"];
-
-  const resumos = saved >= 0
-    ? [`Você fechou ${monthLabel(key)} no azul — guardou ${fmt(saved)}. Isso é exatamente o tipo de término que a gente gosta: você terminou com os gastos antes deles terminarem com você.`,
-       `Renda de ${fmt(inc)}, gasto de ${fmt(spent)}. Sobrou ${fmt(saved)} no bolso. Continue assim e o cartão vai sentir saudade.`]
-    : [`Você gastou ${fmt(Math.abs(saved))} a mais do que ganhou em ${monthLabel(key)}. Não é o fim do mundo, mas é hora de uma conversa séria com seus hábitos.`,
-       `A renda foi ${fmt(inc)}, mas os gastos chegaram a ${fmt(spent)}. O cartão ganhou esse round — mas o próximo mês é uma nova chance.`];
-
-  return {
-    titulo: titles[Math.floor(Math.random() * titles.length)],
-    resumo: resumos[Math.floor(Math.random() * resumos.length)],
-    destaque_positivo: top ? `${top.label} foi sua maior categoria, com ${fmt(top.spent)} gastos.` : "Você manteve os gastos sob controle!",
-    destaque_negativo: overBudgetCats.length > 0
-      ? `${overBudgetCats.map(c => c.label).join(", ")} estourou${overBudgetCats.length > 1 ? "m" : ""} o orçamento.`
-      : null,
-    categoria_campeã: top?.label || "nenhuma",
-    "dica_proxímo_mes": overBudgetCats.length > 0
-      ? `Reduza o orçamento de ${overBudgetCats[0].label} ou tente gastar ${fmt(overBudgetCats[0].spent - overBudgetCats[0].budget)} a menos nessa categoria.`
-      : "Mantenha o ritmo! Tente guardar um pouco mais reservando logo no começo do mês.",
-    score,
-    emoji_do_mes: score >= 70 ? "🎉" : score >= 40 ? "😬" : "😰",
-    frases_ruptura: saved >= 0
-      ? ["A gente precisava de um tempo, mas você soube se controlar.", "Término saudável: você ficou com o dinheiro."]
-      : ["Precisamos conversar sobre seus hábitos...", "O cartão disse que precisa de espaço — e de limite."],
-  };
-}
-
-async function generateMonthlyReport(monthData, monthKey) {
-  const inc = totalIncome(monthData.income);
-  const spent = totalSpent(monthData.spent);
-  const saved = inc - spent;
-  const label = monthLabel(monthKey);
-  const catBreakdown = CATEGORIES.map(c => ({
-    categoria: c.label,
-    orcamento: monthData.alloc[c.id] || 0,
-    gasto: monthData.spent[c.id] || 0
-  }));
-
-  const prompt = `Você é o Breakup — um app com personalidade de "término com o cartão de crédito". 
-Tom: honesto, empático, levemente dramático como uma conversa de término, mas construtivo.
-Dados do mês de ${label}:
-- Renda total: ${fmt(inc)}
-- Total gasto: ${fmt(spent)}
-- Guardado/Excedente: ${fmt(saved)} (${saved >= 0 ? 'positivo' : 'negativo'})
-- Por categoria: ${JSON.stringify(catBreakdown)}
-- Comprovantes registrados: ${monthData.receipts?.length || 0}
-
-Gere um relatório mensal em JSON com EXATAMENTE esta estrutura:
-{
-  "titulo": "título dramático/engraçado estilo término (max 8 palavras)",
-  "resumo": "parágrafo de 2-3 frases com tom do app, avaliando o mês geral",
-  "destaque_positivo": "1 frase sobre o que foi bem",
-  "destaque_negativo": "1 frase sobre o maior problema (ou null se foi ótimo)",
-  "categoria_campeã": "categoria que mais pesou no orçamento",
-  "dica_proxímo_mes": "conselho específico e acionável para o próximo mês",
-  "score": número de 0 a 100 representando saúde financeira do mês,
-  "emoji_do_mes": "1 emoji que resume o mês",
-  "frases_ruptura": ["frase1 estilo término", "frase2 estilo término"]
-}
-Responda APENAS JSON válido, sem markdown.`;
-
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        messages: [{ role: "user", content: prompt }]
-      })
-    });
-    const data = await res.json();
-    const text = data.content?.map(b => b.text || "").join("") || "";
-    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
-    if (parsed && parsed.titulo) return parsed;
-    throw new Error("invalid");
-  } catch {
-    return generateLocalReport(monthData, monthKey);
-  }
-}
 
 // ─── Shared Components ────────────────────────────────────────────────────────
 const s = {
@@ -337,7 +268,6 @@ const s = {
   },
 };
 
-// Responsive screen wrapper
 function Screen({ children, pb = "6rem" }) {
   const { px, py } = useResponsive();
   return (
@@ -429,6 +359,114 @@ function Logo({ size = "sm" }) {
   );
 }
 
+// ─── PAINEL DÍVIDA NUBANK ─────────────────────────────────────────────────────
+function DebtPanel({ debtState, onTogglePaid }) {
+  const [expanded, setExpanded] = useState(false);
+  const { paidIds } = debtState;
+
+  const remaining = NUBANK_INVOICES
+    .filter(inv => !paidIds.includes(inv.id))
+    .reduce((a, inv) => a + inv.value, 0);
+
+  const paidTotal = TOTAL_DEBT_INITIAL - remaining;
+  const pct = (paidTotal / TOTAL_DEBT_INITIAL) * 100;
+
+  return (
+    <div style={{
+      background: "linear-gradient(135deg, #1a0030, #3d0070)",
+      borderRadius: 24, padding: "20px 22px", marginBottom: 14,
+      border: "1.5px solid #6a0dad33"
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {Icons.nubank()}
+          <div>
+            <div style={{ fontFamily: T.fontSec, fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>Dívida Nubank</div>
+            <div style={{ fontFamily: T.fontMain, fontSize: 26, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em", lineHeight: 1.1 }}>
+              {fmt(remaining)}
+            </div>
+          </div>
+        </div>
+        <div style={{
+          background: remaining === 0 ? "#4CAF50" : "rgba(255,255,255,0.1)",
+          borderRadius: 50, padding: "4px 12px"
+        }}>
+          <span style={{ fontFamily: T.fontMain, fontSize: 12, fontWeight: 700, color: remaining === 0 ? "#fff" : "rgba(255,255,255,0.7)" }}>
+            {remaining === 0 ? "🎉 Quitada!" : `${pct.toFixed(0)}% pago`}
+          </span>
+        </div>
+      </div>
+
+      {/* Barra de progresso da dívida */}
+      <div style={{ height: 8, borderRadius: 50, background: "rgba(255,255,255,0.15)", overflow: "hidden", marginBottom: 10 }}>
+        <div style={{
+          height: "100%",
+          width: `${pct}%`,
+          background: "linear-gradient(90deg, #8A05BE, #c362ff)",
+          borderRadius: 50,
+          transition: "width 0.8s ease"
+        }} />
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
+        <span style={{ fontFamily: T.fontSec, fontSize: 11, color: "rgba(255,255,255,0.4)" }}>
+          Pago: {fmt(paidTotal)}
+        </span>
+        <span style={{ fontFamily: T.fontSec, fontSize: 11, color: "rgba(255,255,255,0.4)" }}>
+          Total: {fmt(TOTAL_DEBT_INITIAL)}
+        </span>
+      </div>
+
+      {/* Toggle para ver faturas */}
+      <button onClick={() => setExpanded(e => !e)} style={{
+        width: "100%", padding: "9px", borderRadius: 12,
+        background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)",
+        color: "rgba(255,255,255,0.7)", cursor: "pointer", fontFamily: T.fontSec, fontSize: 12, fontWeight: 600
+      }}>
+        {expanded ? "▲ Fechar faturas" : "▼ Ver faturas"}
+      </button>
+
+      {expanded && (
+        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+          {NUBANK_INVOICES.map(inv => {
+            const paid = paidIds.includes(inv.id);
+            return (
+              <div key={inv.id} style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "10px 14px", borderRadius: 12,
+                background: paid ? "rgba(76,175,80,0.15)" : "rgba(255,255,255,0.06)",
+                border: `1px solid ${paid ? "rgba(76,175,80,0.3)" : "rgba(255,255,255,0.1)"}`,
+                transition: "all 0.2s"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <button onClick={() => onTogglePaid(inv.id)} style={{
+                    width: 22, height: 22, borderRadius: 50,
+                    background: paid ? "#4CAF50" : "rgba(255,255,255,0.1)",
+                    border: `2px solid ${paid ? "#4CAF50" : "rgba(255,255,255,0.3)"}`,
+                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: "all 0.15s", flexShrink: 0
+                  }}>
+                    {paid && <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M5 12l5 5 9-9" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                  </button>
+                  <span style={{
+                    fontFamily: T.fontMain, fontSize: 13, fontWeight: 600,
+                    color: paid ? "rgba(255,255,255,0.4)" : "#fff",
+                    textDecoration: paid ? "line-through" : "none"
+                  }}>{inv.label}</span>
+                </div>
+                <span style={{
+                  fontFamily: T.fontMain, fontSize: 13, fontWeight: 700,
+                  color: paid ? "rgba(255,255,255,0.3)" : "#c362ff"
+                }}>{fmt(inv.value)}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── SCREEN: Setup ────────────────────────────────────────────────────────────
 function SetupScreen({ onSave, onBack }) {
   const [salary, setSalary] = useState("");
@@ -437,11 +475,9 @@ function SetupScreen({ onSave, onBack }) {
   const [extras, setExtras] = useState([]);
   const [extraLabel, setExtraLabel] = useState("");
   const [extraVal, setExtraVal] = useState("");
-  const [alloc, setAlloc] = useState({ comida: 30, transporte: 10, contas: 30, lazer: 15, saude: 10, outros: 5 });
   const [step, setStep] = useState(1);
 
   const total = (+salary || 0) + (+vr || 0) + (+vt || 0) + extras.reduce((a, e) => a + e.value, 0);
-  const pctUsed = Object.values(alloc).reduce((a, v) => a + v, 0);
 
   function addExtra() {
     if (!extraLabel || !extraVal) return;
@@ -449,16 +485,9 @@ function SetupScreen({ onSave, onBack }) {
     setExtraLabel(""); setExtraVal("");
   }
 
-  function setA(id, val) { setAlloc(p => ({ ...p, [id]: Math.max(0, Math.min(100, +val)) })); }
-
   function save() {
     const income = { salary: +salary, vr: +vr, vt: +vt, extras };
-    const incomeTotal = totalIncome(income);
-    const allocAmt = {};
-    CATEGORIES.forEach(c => { allocAmt[c.id] = (alloc[c.id] / 100) * incomeTotal; });
-    allocAmt.comida += +vr;
-    allocAmt.transporte += +vt;
-    onSave(income, allocAmt);
+    onSave(income);
   }
 
   const inputStyle = {
@@ -485,133 +514,88 @@ function SetupScreen({ onSave, onBack }) {
         </div>
         <div style={{ background: T.dark, borderRadius: 20, padding: "20px 22px" }}>
           <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted, fontWeight: 500, marginBottom: 6 }}>
-            {step === 1 ? "Passo 1 de 2" : "Passo 2 de 2"}
+            Configuração inicial
           </div>
           <div style={{ fontFamily: T.fontMain, fontSize: 18, fontWeight: 700, color: T.bg, lineHeight: 1.2 }}>
-            {step === 1 ? "Qual é a sua renda esse mês?" : "Como você quer distribuir?"}
+            Qual é a sua renda esse mês?
           </div>
           <div style={{ fontFamily: T.fontSec, fontSize: 13, color: T.muted, marginTop: 6 }}>
-            {step === 1 ? "A gente vai te ajudar a terminar com o cartão 💔" : "Ajuste como quiser — pode mudar depois."}
+            A gente vai te ajudar a terminar com o cartão 💔
           </div>
         </div>
       </div>
 
-      {step === 1 && (
-        <>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
-            {[
-              { label: "Salário", val: salary, set: setSalary, icon: "💰" },
-              { label: "Vale Refeição", val: vr, set: setVr, icon: "🥗" },
-              { label: "Vale Transporte", val: vt, set: setVt, icon: "🚌" },
-            ].map(({ label, val, set, icon }) => (
-              <div key={label} style={{ background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: 16, padding: "14px 18px" }}>
-                <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted, fontWeight: 500, marginBottom: 4 }}>{icon} {label}</div>
-                <div style={{ display: "flex", alignItems: "center" }}>
-                  <span style={{ fontFamily: T.fontMain, fontSize: 13, color: T.muted, marginRight: 4 }}>R$</span>
-                  <input type="number" value={val} onChange={e => set(e.target.value)} placeholder="0,00"
-                    style={{ flex: 1, fontSize: 20, fontWeight: 700, color: T.dark, border: "none", background: "transparent", outline: "none", fontFamily: T.fontMain }} />
-                </div>
-              </div>
-            ))}
-
-            {extras.map((e, i) => (
-              <div key={i} style={{ background: "#FFF8E0", border: `1.5px solid #FFD700`, borderRadius: 16, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                  <div style={{ fontFamily: T.fontSec, fontSize: 11, color: "#A07000" }}>✨ {e.label}</div>
-                  <div style={{ fontFamily: T.fontMain, fontSize: 16, fontWeight: 700, color: T.dark }}>{fmt(e.value)}</div>
-                </div>
-                <button onClick={() => setExtras(p => p.filter((_, j) => j !== i))}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: T.muted, fontSize: 20, lineHeight: 1 }}>×</button>
-              </div>
-            ))}
-
-            <div style={{ display: "flex", gap: 8 }}>
-              <input value={extraLabel} onChange={e => setExtraLabel(e.target.value)} placeholder="Ex: Freelance"
-                style={{ ...inputStyle, fontSize: 13, fontWeight: 500, padding: "11px 14px", flex: 1 }} />
-              <input type="number" value={extraVal} onChange={e => setExtraVal(e.target.value)} placeholder="R$"
-                style={{ ...inputStyle, fontSize: 13, fontWeight: 500, padding: "11px 14px", width: 90 }} />
-              <button onClick={addExtra} style={{
-                padding: "11px 16px", borderRadius: 16, background: T.dark,
-                color: T.bg, border: "none", cursor: "pointer", fontSize: 16, fontWeight: 700
-              }}>+</button>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
+        {[
+          { label: "Salário", val: salary, set: setSalary, icon: "💰" },
+          { label: "Vale Refeição", val: vr, set: setVr, icon: "🥗" },
+          { label: "Vale Transporte", val: vt, set: setVt, icon: "🚌" },
+        ].map(({ label, val, set, icon }) => (
+          <div key={label} style={{ background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: 16, padding: "14px 18px" }}>
+            <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted, fontWeight: 500, marginBottom: 4 }}>{icon} {label}</div>
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <span style={{ fontFamily: T.fontMain, fontSize: 13, color: T.muted, marginRight: 4 }}>R$</span>
+              <input type="number" value={val} onChange={e => set(e.target.value)} placeholder="0,00"
+                style={{ flex: 1, fontSize: 20, fontWeight: 700, color: T.dark, border: "none", background: "transparent", outline: "none", fontFamily: T.fontMain }} />
             </div>
           </div>
+        ))}
 
-          {total > 0 && (
-            <div style={{ background: T.grad, borderRadius: 20, padding: "18px 22px", marginBottom: 20 }}>
-              <div style={{ fontFamily: T.fontSec, fontSize: 11, color: "rgba(255,255,255,0.75)", marginBottom: 4 }}>renda total do mês</div>
-              <div style={{ fontFamily: T.fontMain, fontSize: 28, fontWeight: 800, color: T.bg }}>{fmt(total)}</div>
+        {extras.map((e, i) => (
+          <div key={i} style={{ background: "#FFF8E0", border: `1.5px solid #FFD700`, borderRadius: 16, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div>
+              <div style={{ fontFamily: T.fontSec, fontSize: 11, color: "#A07000" }}>✨ {e.label}</div>
+              <div style={{ fontFamily: T.fontMain, fontSize: 16, fontWeight: 700, color: T.dark }}>{fmt(e.value)}</div>
             </div>
-          )}
+            <button onClick={() => setExtras(p => p.filter((_, j) => j !== i))}
+              style={{ background: "none", border: "none", cursor: "pointer", color: T.muted, fontSize: 20, lineHeight: 1 }}>×</button>
+          </div>
+        ))}
 
-          <button onClick={() => total > 0 && setStep(2)} disabled={!total}
-            style={{
-              width: "100%", padding: "15px", borderRadius: 50,
-              background: total > 0 ? T.grad : "#E0E0E0",
-              color: total > 0 ? T.bg : T.muted,
-              border: "none", cursor: total > 0 ? "pointer" : "not-allowed",
-              fontSize: 15, fontWeight: 700, fontFamily: T.fontMain
-            }}>
-            Próximo →
-          </button>
-        </>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input value={extraLabel} onChange={e => setExtraLabel(e.target.value)} placeholder="Ex: Freelance"
+            style={{ ...inputStyle, fontSize: 13, fontWeight: 500, padding: "11px 14px", flex: 1 }} />
+          <input type="number" value={extraVal} onChange={e => setExtraVal(e.target.value)} placeholder="R$"
+            style={{ ...inputStyle, fontSize: 13, fontWeight: 500, padding: "11px 14px", width: 90 }} />
+          <button onClick={addExtra} style={{
+            padding: "11px 16px", borderRadius: 16, background: T.dark,
+            color: T.bg, border: "none", cursor: "pointer", fontSize: 16, fontWeight: 700
+          }}>+</button>
+        </div>
+      </div>
+
+      {total > 0 && (
+        <div style={{ background: T.grad, borderRadius: 20, padding: "18px 22px", marginBottom: 20 }}>
+          <div style={{ fontFamily: T.fontSec, fontSize: 11, color: "rgba(255,255,255,0.75)", marginBottom: 4 }}>renda total do mês</div>
+          <div style={{ fontFamily: T.fontMain, fontSize: 28, fontWeight: 800, color: T.bg }}>{fmt(total)}</div>
+        </div>
       )}
 
-      {step === 2 && (
-        <>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div style={{ fontFamily: T.fontSec, fontSize: 13, color: T.muted }}>Distribuição das categorias</div>
-            <div style={{ fontFamily: T.fontMain, fontSize: 14, fontWeight: 700, color: pctUsed > 100 ? T.orange : T.dark }}>{pctUsed}% alocado</div>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 24 }}>
-            {CATEGORIES.map(cat => (
-              <div key={cat.id} style={{ background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: 16, padding: "14px 16px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 30, height: 30, borderRadius: 9, background: T.dark, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      {CatIcons[cat.id] ? CatIcons[cat.id](T.bg) : <span style={{ color: T.bg, fontSize: 12 }}>{cat.icon}</span>}
-                    </div>
-                    <span style={{ fontFamily: T.fontMain, fontSize: 13, fontWeight: 600, color: T.dark }}>{cat.label}</span>
-                  </div>
-                  <span style={{ fontFamily: T.fontMain, fontSize: 14, fontWeight: 700, color: T.dark }}>{fmt((alloc[cat.id] / 100) * total)}</span>
-                </div>
-                <input type="range" min={0} max={100} step={1} value={alloc[cat.id]} onChange={e => setA(cat.id, e.target.value)}
-                  style={{ width: "100%", accentColor: T.orange }} />
-                <div style={{ display: "flex", justifyContent: "flex-end", fontFamily: T.fontSec, fontSize: 11, color: T.muted }}>{alloc[cat.id]}%</div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={() => setStep(1)} style={{
-              flex: "0 0 auto", padding: "14px 20px", borderRadius: 50, background: T.bg,
-              border: `1.5px solid ${T.border}`, color: T.dark, cursor: "pointer", fontFamily: T.fontMain, fontWeight: 600, fontSize: 14
-            }}>← Voltar</button>
-            <button onClick={save} disabled={pctUsed > 100} style={{
-              flex: 1, padding: "14px", borderRadius: 50,
-              background: pctUsed > 100 ? "#E0E0E0" : T.grad,
-              color: pctUsed > 100 ? T.muted : T.bg,
-              border: "none", cursor: pctUsed > 100 ? "not-allowed" : "pointer",
-              fontSize: 15, fontWeight: 700, fontFamily: T.fontMain
-            }}>
-              Começar o mês 💔
-            </button>
-          </div>
-        </>
-      )}
+      <button onClick={() => total > 0 && save()} disabled={!total}
+        style={{
+          width: "100%", padding: "15px", borderRadius: 50,
+          background: total > 0 ? T.grad : "#E0E0E0",
+          color: total > 0 ? T.bg : T.muted,
+          border: "none", cursor: total > 0 ? "pointer" : "not-allowed",
+          fontSize: 15, fontWeight: 700, fontFamily: T.fontMain
+        }}>
+        Começar o mês 💔
+      </button>
     </Screen>
   );
 }
 
 // ─── SCREEN: Dashboard ────────────────────────────────────────────────────────
-function Dashboard({ monthData, onAddReceipt, onAddManual, onNavigate, currentMonth, allMonths, onCloseMonth }) {
-  const { income, alloc, spent, receipts, closed } = monthData;
+function Dashboard({ monthData, onAddReceipt, onAddManual, onNavigate, currentMonth, allMonths, onCloseMonth, debtState, onTogglePaid, onUpdateWeekAlloc }) {
+  const { income, weeks, receipts, closed } = monthData;
   const incTotal = totalIncome(income);
-  const spentTotal = totalSpent(spent);
+  const spentTotal = totalMonthSpent(weeks);
   const saved = incTotal - spentTotal;
   const pctSpent = incTotal > 0 ? (spentTotal / incTotal) * 100 : 0;
   const { num } = useResponsive();
+  const [activeWeek, setActiveWeek] = useState("s1");
+
+  const weekData = weeks?.[activeWeek] || { alloc: {}, spent: {} };
 
   return (
     <Screen pb="6rem">
@@ -627,12 +611,6 @@ function Dashboard({ monthData, onAddReceipt, onAddManual, onNavigate, currentMo
               {Icons.history(T.bg)}
             </button>
           )}
-          <button onClick={() => onNavigate("budget")} style={{
-            width: 40, height: 40, borderRadius: 12, background: T.dark,
-            border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
-          }} title="Editar orçamento">
-            {Icons.card(T.bg)}
-          </button>
           <button onClick={() => onNavigate("receipts")} style={{
             width: 40, height: 40, borderRadius: 12, background: T.dark,
             border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
@@ -647,7 +625,7 @@ function Dashboard({ monthData, onAddReceipt, onAddManual, onNavigate, currentMo
         {monthLabel(currentMonth)}
       </div>
 
-      {/* Hero card */}
+      {/* Hero card mensal */}
       <div style={{
         background: saved >= 0 ? T.grad : T.dark,
         borderRadius: 24, padding: "22px 24px", marginBottom: 14,
@@ -657,18 +635,14 @@ function Dashboard({ monthData, onAddReceipt, onAddManual, onNavigate, currentMo
           {Icons.scissors(T.bg)}
         </div>
         <div style={{ fontFamily: T.fontSec, fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.75)", marginBottom: 4 }}>
-          {saved >= 0 ? "esse mês você guardou" : "esse mês você estourou"}
+          {saved >= 0 ? "no mês você guardou" : "no mês você estourou"}
         </div>
         <div style={{ fontFamily: T.fontMain, fontSize: num, fontWeight: 800, color: T.bg, letterSpacing: "-0.02em", lineHeight: 1.1 }}>
           {fmt(Math.abs(saved))}
         </div>
-        <div style={{ fontFamily: T.fontSec, fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 4 }}>
-          {saved >= 0 ? "pra quitar o cartão 🎉" : "acima do planejado 😬"}
-        </div>
-
         <div style={{ display: "flex", gap: 16, marginTop: 16, paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.15)" }}>
           <div>
-            <div style={{ fontFamily: T.fontSec, fontSize: 10, color: "rgba(255,255,255,0.5)", marginBottom: 2 }}>gasto</div>
+            <div style={{ fontFamily: T.fontSec, fontSize: 10, color: "rgba(255,255,255,0.5)", marginBottom: 2 }}>gasto total</div>
             <div style={{ fontFamily: T.fontMain, fontSize: 16, fontWeight: 700, color: T.bg }}>{fmt(spentTotal)}</div>
           </div>
           <div>
@@ -681,6 +655,9 @@ function Dashboard({ monthData, onAddReceipt, onAddManual, onNavigate, currentMo
           </div>
         </div>
       </div>
+
+      {/* Painel dívida */}
+      <DebtPanel debtState={debtState} onTogglePaid={onTogglePaid} />
 
       {/* Close month button */}
       {!closed && (
@@ -705,43 +682,34 @@ function Dashboard({ monthData, onAddReceipt, onAddManual, onNavigate, currentMo
         </button>
       )}
 
-      {/* Categories */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
-        {CATEGORIES.map(cat => {
-          const budget = alloc[cat.id] || 0;
-          const used = spent[cat.id] || 0;
-          const pct = budget > 0 ? (used / budget) * 100 : 0;
-          const remaining = budget - used;
-          const overBudget = used > budget && budget > 0;
-
+      {/* Tabs de semanas */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}>
+        {WEEKS.map(w => {
+          const wSpent = totalWeekSpent(weeks?.[w.id]);
+          const isActive = activeWeek === w.id;
           return (
-            <div key={cat.id} style={{
-              ...s.card,
-              border: `1.5px solid ${overBudget ? T.orange : T.border}`,
-              background: overBudget ? "#FFF5EF" : T.bg
+            <button key={w.id} onClick={() => setActiveWeek(w.id)} style={{
+              flexShrink: 0,
+              padding: "8px 16px", borderRadius: 50,
+              background: isActive ? T.dark : T.bg,
+              border: `1.5px solid ${isActive ? T.dark : T.border}`,
+              color: isActive ? T.bg : T.muted,
+              cursor: "pointer", fontFamily: T.fontMain, fontSize: 12, fontWeight: 600,
+              transition: "all 0.15s"
             }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 34, height: 34, borderRadius: 10, background: T.dark, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {CatIcons[cat.id] ? CatIcons[cat.id](T.bg) : null}
-                  </div>
-                  <div>
-                    <div style={{ fontFamily: T.fontMain, fontSize: 13, fontWeight: 600, color: T.dark }}>{cat.label}</div>
-                    <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted }}>orçamento {fmt(budget)}</div>
-                  </div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontFamily: T.fontMain, fontSize: 15, fontWeight: 700, color: overBudget ? T.orange : T.dark }}>{fmt(used)}</div>
-                  <div style={{ fontFamily: T.fontSec, fontSize: 11, fontWeight: 500, color: overBudget ? T.orange : "#4CAF50" }}>
-                    {overBudget ? `+${fmt(used - budget)}` : `${fmt(remaining)} rest.`}
-                  </div>
-                </div>
-              </div>
-              <ProgressBar pct={pct} overBudget={overBudget} />
-            </div>
+              {w.label}
+              {wSpent > 0 && <span style={{ marginLeft: 6, fontSize: 10, opacity: 0.7 }}>{fmtShort(wSpent)}</span>}
+            </button>
           );
         })}
       </div>
+
+      {/* Categorias da semana ativa */}
+      <WeekCategories
+        weekId={activeWeek}
+        weekData={weekData}
+        onUpdateAlloc={(catId, val) => onUpdateWeekAlloc(activeWeek, catId, val)}
+      />
 
       {/* FAB */}
       <div style={{ position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)", zIndex: 100, display: "flex", gap: 10 }}>
@@ -768,6 +736,195 @@ function Dashboard({ monthData, onAddReceipt, onAddManual, onNavigate, currentMo
   );
 }
 
+// ─── COMPONENT: Categorias da Semana ─────────────────────────────────────────
+function WeekCategories({ weekId, weekData, onUpdateAlloc }) {
+  const { alloc = {}, spent = {} } = weekData;
+  // Estado local para edição do orçamento por categoria
+  const [editingCat, setEditingCat] = useState(null);
+  const [editVal, setEditVal] = useState("");
+
+  function startEdit(catId) {
+    setEditingCat(catId);
+    setEditVal(alloc[catId] ? String(alloc[catId]) : "");
+  }
+
+  function commitEdit(catId) {
+    const v = parseFloat(editVal.replace(",", "."));
+    if (!isNaN(v) && v >= 0) onUpdateAlloc(catId, v);
+    setEditingCat(null);
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+      {CATEGORIES.map(cat => {
+        const budget = alloc[cat.id] || 0;
+        const used = spent[cat.id] || 0;
+        const pct = budget > 0 ? (used / budget) * 100 : 0;
+        const remaining = budget - used;
+        const overBudget = used > budget && budget > 0;
+        const isEditing = editingCat === cat.id;
+
+        return (
+          <div key={cat.id} style={{
+            ...s.card,
+            border: `1.5px solid ${overBudget ? T.orange : T.border}`,
+            background: overBudget ? "#FFF5EF" : T.bg
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: budget > 0 ? 10 : 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 34, height: 34, borderRadius: 10, background: T.dark, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  {CatIcons[cat.id] ? CatIcons[cat.id](T.bg) : null}
+                </div>
+                <div>
+                  <div style={{ fontFamily: T.fontMain, fontSize: 13, fontWeight: 600, color: T.dark }}>{cat.label}</div>
+                  {/* Campo editável do orçamento */}
+                  {isEditing ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
+                      <span style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted }}>R$</span>
+                      <input
+                        autoFocus
+                        type="number"
+                        value={editVal}
+                        onChange={e => setEditVal(e.target.value)}
+                        onBlur={() => commitEdit(cat.id)}
+                        onKeyDown={e => { if (e.key === "Enter") commitEdit(cat.id); if (e.key === "Escape") setEditingCat(null); }}
+                        style={{
+                          width: 80, fontSize: 12, fontWeight: 600, color: T.orange,
+                          border: `1px solid ${T.orange}`, borderRadius: 6, padding: "2px 6px",
+                          fontFamily: T.fontMain, background: "#FFF0E8", outline: "none"
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <button onClick={() => startEdit(cat.id)} style={{
+                      fontFamily: T.fontSec, fontSize: 11, color: budget > 0 ? T.muted : T.orange,
+                      background: "none", border: "none", cursor: "pointer", padding: 0, marginTop: 2,
+                      textAlign: "left", fontWeight: budget > 0 ? 400 : 600
+                    }}>
+                      {budget > 0 ? `limite ${fmt(budget)}` : "✏️ definir limite"}
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontFamily: T.fontMain, fontSize: 15, fontWeight: 700, color: overBudget ? T.orange : T.dark }}>{fmt(used)}</div>
+                {budget > 0 && (
+                  <div style={{ fontFamily: T.fontSec, fontSize: 11, fontWeight: 500, color: overBudget ? T.orange : "#4CAF50" }}>
+                    {overBudget ? `+${fmt(used - budget)}` : `${fmt(remaining)} rest.`}
+                  </div>
+                )}
+              </div>
+            </div>
+            {budget > 0 && <ProgressBar pct={pct} overBudget={overBudget} />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Claude API ───────────────────────────────────────────────────────────────
+async function analyzeReceipt(base64, mimeType, patterns) {
+  const patternHint = Object.keys(patterns).length
+    ? `Padrões conhecidos: ${JSON.stringify(patterns)}`
+    : "";
+  const prompt = `Você é um assistente financeiro. Analise este comprovante e extraia as informações.
+Categorias: comida, transporte, contas, lazer, saude, outros.
+${patternHint}
+Responda APENAS em JSON válido, sem markdown:
+{"estabelecimento":"nome","valor":0.00,"data":"DD/MM/AAAA ou null","categoria":"categoria","confianca":0,"motivo":"razão breve"}`;
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1000,
+      messages: [{ role: "user", content: [
+        { type: "image", source: { type: "base64", media_type: mimeType, data: base64 } },
+        { type: "text", text: prompt }
+      ]}]
+    })
+  });
+  const data = await res.json();
+  const text = data.content?.map(b => b.text || "").join("") || "";
+  return JSON.parse(text.replace(/```json|```/g, "").trim());
+}
+
+async function generateMonthlyReport(monthData, monthKey) {
+  const inc = totalIncome(monthData.income);
+  const spent = totalMonthSpent(monthData.weeks);
+  const saved = inc - spent;
+  const label = monthLabel(monthKey);
+
+  // Agregar gastos por categoria de todas as semanas
+  const catSpent = {};
+  CATEGORIES.forEach(c => catSpent[c.id] = 0);
+  Object.values(monthData.weeks || {}).forEach(w => {
+    CATEGORIES.forEach(c => { catSpent[c.id] += (w.spent?.[c.id] || 0); });
+  });
+
+  const catBreakdown = CATEGORIES.map(c => ({
+    categoria: c.label,
+    gasto: catSpent[c.id]
+  }));
+
+  const prompt = `Você é o Breakup — um app com personalidade de "término com o cartão de crédito". 
+Tom: honesto, empático, levemente dramático como uma conversa de término, mas construtivo.
+Dados do mês de ${label}:
+- Renda total: ${fmt(inc)}
+- Total gasto: ${fmt(spent)}
+- Guardado/Excedente: ${fmt(saved)} (${saved >= 0 ? 'positivo' : 'negativo'})
+- Por categoria: ${JSON.stringify(catBreakdown)}
+
+Gere um relatório mensal em JSON com EXATAMENTE esta estrutura:
+{
+  "titulo": "título dramático/engraçado estilo término (max 8 palavras)",
+  "resumo": "parágrafo de 2-3 frases com tom do app, avaliando o mês geral",
+  "destaque_positivo": "1 frase sobre o que foi bem",
+  "destaque_negativo": "1 frase sobre o maior problema (ou null se foi ótimo)",
+  "categoria_campeã": "categoria que mais pesou no orçamento",
+  "dica_proxímo_mes": "conselho específico e acionável para o próximo mês",
+  "score": número de 0 a 100 representando saúde financeira do mês,
+  "emoji_do_mes": "1 emoji que resume o mês",
+  "frases_ruptura": ["frase1 estilo término", "frase2 estilo término"]
+}
+Responda APENAS JSON válido, sem markdown.`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1000,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+    const data = await res.json();
+    const text = data.content?.map(b => b.text || "").join("") || "";
+    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+    if (parsed && parsed.titulo) return parsed;
+    throw new Error("invalid");
+  } catch {
+    // fallback local
+    const pct = inc > 0 ? (spent / inc) * 100 : 0;
+    const score = Math.max(0, Math.min(100, Math.round(100 - pct * 0.8)));
+    return {
+      titulo: saved >= 0 ? "Mês encerrado, cartão sobreviveu 💪" : "Ops, o cartão venceu dessa vez",
+      resumo: saved >= 0
+        ? `Você fechou ${label} no azul — guardou ${fmt(saved)}.`
+        : `Você gastou ${fmt(Math.abs(saved))} a mais do que ganhou em ${label}.`,
+      destaque_positivo: "Continue acompanhando seus gastos semana a semana!",
+      destaque_negativo: saved < 0 ? "Estouro registrado, vamos refletir." : null,
+      categoria_campeã: "—",
+      "dica_proxímo_mes": "Defina limites semanais para cada categoria.",
+      score,
+      emoji_do_mes: score >= 70 ? "🎉" : score >= 40 ? "😬" : "😰",
+      frases_ruptura: saved >= 0 ? ["Término saudável: você ficou com o dinheiro."] : ["O cartão disse que precisa de espaço — e de limite."],
+    };
+  }
+}
+
 // ─── SCREEN: Add Receipt ──────────────────────────────────────────────────────
 function AddReceiptScreen({ onBack, onConfirm, patterns }) {
   const [file, setFile] = useState(null);
@@ -776,6 +933,7 @@ function AddReceiptScreen({ onBack, onConfirm, patterns }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [selectedCat, setSelectedCat] = useState(null);
+  const [selectedWeek, setSelectedWeek] = useState("s1");
   const fileRef = useRef();
 
   async function handleFile(f) {
@@ -798,17 +956,33 @@ function AddReceiptScreen({ onBack, onConfirm, patterns }) {
 
   function confirm() {
     if (!result) return;
-    onConfirm({ ...result, categoria: selectedCat, file: preview, ts: Date.now() });
+    onConfirm({ ...result, categoria: selectedCat, weekId: selectedWeek, file: preview, ts: Date.now() });
   }
 
   return (
     <Screen pb="2rem">
       <ScreenHeader label="Novo lançamento" title="Comprovante" onBack={onBack} />
 
+      {/* Seleção de semana */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted, fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>Em qual semana?</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          {WEEKS.map(w => (
+            <button key={w.id} onClick={() => setSelectedWeek(w.id)} style={{
+              flex: 1, padding: "8px 4px", borderRadius: 12,
+              background: selectedWeek === w.id ? T.dark : T.bg,
+              border: `1.5px solid ${selectedWeek === w.id ? T.dark : T.border}`,
+              color: selectedWeek === w.id ? T.bg : T.muted,
+              cursor: "pointer", fontFamily: T.fontMain, fontSize: 12, fontWeight: 600
+            }}>{w.label}</button>
+          ))}
+        </div>
+      </div>
+
       {!file && (
         <div onClick={() => fileRef.current.click()} style={{
           border: `2px dashed ${T.border}`, borderRadius: 24, padding: "48px 24px",
-          textAlign: "center", cursor: "pointer", background: T.bg, transition: "border-color 0.2s"
+          textAlign: "center", cursor: "pointer", background: T.bg
         }}>
           <div style={{ width: 72, height: 72, borderRadius: 20, background: T.dark, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
             {Icons.camera(T.bg)}
@@ -935,6 +1109,7 @@ function ReceiptsScreen({ receipts, onBack }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {receipts.map((r, i) => {
           const cat = CATEGORIES.find(c => c.id === r.categoria);
+          const weekLabel = WEEKS.find(w => w.id === r.weekId)?.label || "";
           return (
             <div key={i} onClick={() => setSelected(selected === i ? null : i)} style={{ ...s.card, cursor: "pointer" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -948,7 +1123,10 @@ function ReceiptsScreen({ receipts, onBack }) {
                   )}
                   <div>
                     <div style={{ fontFamily: T.fontMain, fontSize: 13, fontWeight: 600, color: T.dark }}>{r.estabelecimento}</div>
-                    <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted }}>{r.data || new Date(r.ts).toLocaleDateString("pt-BR")}</div>
+                    <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted }}>
+                      {weekLabel && <span style={{ marginRight: 6 }}>{weekLabel} ·</span>}
+                      {r.data || new Date(r.ts).toLocaleDateString("pt-BR")}
+                    </div>
                   </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
@@ -974,7 +1152,6 @@ function HistoryScreen({ allData, onBack }) {
     <Screen pb="2rem">
       <ScreenHeader label="Histórico" title="Meses anteriores" onBack={onBack} />
 
-      {/* Mini chart */}
       {months.length > 1 && (
         <div style={{ ...s.cardDark, marginBottom: 20 }}>
           <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.1em" }}>Evolução mensal</div>
@@ -983,8 +1160,8 @@ function HistoryScreen({ allData, onBack }) {
               const d = allData[mk];
               if (!d) return null;
               const inc = totalIncome(d.income);
-              const spent = totalSpent(d.spent);
-              const maxVal = Math.max(...months.slice(0, 6).map(m => totalIncome(allData[m] || {income:{}})));
+              const spent = totalMonthSpent(d.weeks);
+              const maxVal = Math.max(...months.slice(0, 6).map(m => totalIncome(allData[m]?.income || {})));
               const h = maxVal > 0 ? (spent / maxVal) * 60 : 10;
               return (
                 <div key={mk} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
@@ -1002,7 +1179,7 @@ function HistoryScreen({ allData, onBack }) {
           const d = allData[mk];
           if (!d) return null;
           const inc = totalIncome(d.income);
-          const spent = totalSpent(d.spent);
+          const spent = totalMonthSpent(d.weeks);
           const saved = inc - spent;
           return (
             <div key={mk} style={{ ...s.card }}>
@@ -1060,13 +1237,19 @@ function ReportScreen({ monthData, currentMonth, onBack }) {
   }, []);
 
   const inc = totalIncome(monthData.income);
-  const spent = totalSpent(monthData.spent);
+  const spent = totalMonthSpent(monthData.weeks);
   const saved = inc - spent;
   const label = monthLabel(currentMonth);
 
-  // Sort categories by spent desc
+  // Agregar categorias de todas as semanas
+  const catSpent = {};
+  CATEGORIES.forEach(c => catSpent[c.id] = 0);
+  Object.values(monthData.weeks || {}).forEach(w => {
+    CATEGORIES.forEach(c => { catSpent[c.id] += (w.spent?.[c.id] || 0); });
+  });
+
   const catRanking = [...CATEGORIES]
-    .map(c => ({ ...c, spent: monthData.spent[c.id] || 0, budget: monthData.alloc[c.id] || 0 }))
+    .map(c => ({ ...c, spent: catSpent[c.id] || 0 }))
     .filter(c => c.spent > 0)
     .sort((a, b) => b.spent - a.spent);
 
@@ -1074,7 +1257,6 @@ function ReportScreen({ monthData, currentMonth, onBack }) {
     <Screen pb="3rem">
       <ScreenHeader label="Relatório mensal" title={label} onBack={onBack} />
 
-      {/* Score hero */}
       <div style={{ background: T.grad, borderRadius: 24, padding: "28px 24px", marginBottom: 16, textAlign: "center", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", right: -30, top: -30, opacity: 0.1, transform: "scale(4)" }}>
           {Icons.scissors(T.bg)}
@@ -1097,7 +1279,6 @@ function ReportScreen({ monthData, currentMonth, onBack }) {
         ) : null}
       </div>
 
-      {/* Numbers */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
         {[
           { label: "renda", val: fmt(inc), color: T.dark },
@@ -1111,7 +1292,6 @@ function ReportScreen({ monthData, currentMonth, onBack }) {
         ))}
       </div>
 
-      {/* AI Summary */}
       {report && (
         <>
           <div style={{ ...s.cardDark, marginBottom: 16 }}>
@@ -1133,12 +1313,9 @@ function ReportScreen({ monthData, currentMonth, onBack }) {
             )}
           </div>
 
-          {/* Breakup phrases */}
           {report.frases_ruptura && report.frases_ruptura.length > 0 && (
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontFamily: T.fontSec, fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>
-                O Breakup diz...
-              </div>
+              <div style={{ fontFamily: T.fontSec, fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>O Breakup diz...</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {report.frases_ruptura.map((f, i) => (
                   <div key={i} style={{ ...s.card, display: "flex", gap: 10, alignItems: "flex-start" }}>
@@ -1152,7 +1329,7 @@ function ReportScreen({ monthData, currentMonth, onBack }) {
         </>
       )}
 
-      {/* Category breakdown */}
+      {/* Gastos por categoria */}
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontFamily: T.fontSec, fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>
           Gastos por categoria
@@ -1160,43 +1337,33 @@ function ReportScreen({ monthData, currentMonth, onBack }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {catRanking.map((cat, rank) => {
             const pct = inc > 0 ? (cat.spent / inc) * 100 : 0;
-            const overBudget = cat.budget > 0 && cat.spent > cat.budget;
             return (
-              <div key={cat.id} style={{ ...s.card, border: `1.5px solid ${overBudget ? T.orange : T.border}` }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <div key={cat.id} style={{ ...s.card }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                   {rank === 0 && <div style={{ background: T.grad, borderRadius: 50, padding: "2px 10px" }}>
                     <span style={{ fontFamily: T.fontMain, fontSize: 10, fontWeight: 700, color: T.bg }}>🔥 1º</span>
                   </div>}
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ width: 30, height: 30, borderRadius: 9, background: T.dark, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          {CatIcons[cat.id] ? CatIcons[cat.id](T.bg) : null}
-                        </div>
-                        <span style={{ fontFamily: T.fontMain, fontSize: 13, fontWeight: 600, color: T.dark }}>{cat.label}</span>
+                  <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ width: 30, height: 30, borderRadius: 9, background: T.dark, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {CatIcons[cat.id] ? CatIcons[cat.id](T.bg) : null}
                       </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontFamily: T.fontMain, fontSize: 14, fontWeight: 700, color: overBudget ? T.orange : T.dark }}>{fmt(cat.spent)}</div>
-                        <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted }}>{pct.toFixed(0)}% da renda</div>
-                      </div>
+                      <span style={{ fontFamily: T.fontMain, fontSize: 13, fontWeight: 600, color: T.dark }}>{cat.label}</span>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontFamily: T.fontMain, fontSize: 14, fontWeight: 700, color: T.dark }}>{fmt(cat.spent)}</div>
+                      <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted }}>{pct.toFixed(0)}% da renda</div>
                     </div>
                   </div>
                 </div>
-                <ProgressBar pct={cat.budget > 0 ? (cat.spent / cat.budget) * 100 : 100} overBudget={overBudget} />
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-                  <span style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted }}>orçamento {fmt(cat.budget)}</span>
-                  <span style={{ fontFamily: T.fontSec, fontSize: 11, color: overBudget ? T.orange : "#4CAF50", fontWeight: 500 }}>
-                    {overBudget ? `+${fmt(cat.spent - cat.budget)} acima` : `${fmt(cat.budget - cat.spent)} sobrou`}
-                  </span>
-                </div>
+                <ProgressBar pct={pct} />
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* Next month tip */}
-      {report && report.dica_proxímo_mes && (
+      {report?.dica_proxímo_mes && (
         <div style={{ background: T.dark, borderRadius: 20, padding: "20px 22px" }}>
           <div style={{ fontFamily: T.fontSec, fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>
             Dica pro próximo mês
@@ -1206,74 +1373,6 @@ function ReportScreen({ monthData, currentMonth, onBack }) {
           </div>
         </div>
       )}
-
-      {error && (
-        <div style={{ ...s.card, border: `1.5px solid ${T.orange}`, marginTop: 16 }}>
-          <div style={{ fontFamily: T.fontSec, fontSize: 13, color: T.orange }}>{error}</div>
-        </div>
-      )}
-    </Screen>
-  );
-}
-
-// ─── SCREEN: Edit Budget ─────────────────────────────────────────────────────
-function BudgetEditScreen({ monthData, onBack, onSave }) {
-  const incTotal = totalIncome(monthData.income);
-  const [alloc, setAlloc] = useState(() => {
-    const pcts = {};
-    CATEGORIES.forEach(c => {
-      pcts[c.id] = incTotal > 0 ? Math.round(((monthData.alloc[c.id] || 0) / incTotal) * 100) : 0;
-    });
-    return pcts;
-  });
-
-  const pctUsed = Object.values(alloc).reduce((a, v) => a + v, 0);
-
-  function setA(id, val) { setAlloc(p => ({ ...p, [id]: Math.max(0, Math.min(100, +val)) })); }
-
-  function save() {
-    const allocAmt = {};
-    CATEGORIES.forEach(c => { allocAmt[c.id] = (alloc[c.id] / 100) * incTotal; });
-    onSave(allocAmt);
-  }
-
-  return (
-    <Screen pb="2rem">
-      <ScreenHeader label="Configurações" title="Editar orçamento" onBack={onBack} />
-
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <div style={{ fontFamily: T.fontSec, fontSize: 13, color: T.muted }}>Renda: {fmt(incTotal)}</div>
-        <div style={{ fontFamily: T.fontMain, fontSize: 14, fontWeight: 700, color: pctUsed > 100 ? T.orange : T.dark }}>{pctUsed}% alocado</div>
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 24 }}>
-        {CATEGORIES.map(cat => (
-          <div key={cat.id} style={{ background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: 16, padding: "14px 16px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 30, height: 30, borderRadius: 9, background: T.dark, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {CatIcons[cat.id] ? CatIcons[cat.id](T.bg) : <span style={{ color: T.bg, fontSize: 12 }}>{cat.icon}</span>}
-                </div>
-                <span style={{ fontFamily: T.fontMain, fontSize: 13, fontWeight: 600, color: T.dark }}>{cat.label}</span>
-              </div>
-              <span style={{ fontFamily: T.fontMain, fontSize: 14, fontWeight: 700, color: T.dark }}>{fmt((alloc[cat.id] / 100) * incTotal)}</span>
-            </div>
-            <input type="range" min={0} max={100} step={1} value={alloc[cat.id]} onChange={e => setA(cat.id, e.target.value)}
-              style={{ width: "100%", accentColor: T.orange }} />
-            <div style={{ display: "flex", justifyContent: "flex-end", fontFamily: T.fontSec, fontSize: 11, color: T.muted }}>{alloc[cat.id]}%</div>
-          </div>
-        ))}
-      </div>
-
-      <button onClick={save} disabled={pctUsed > 100} style={{
-        width: "100%", padding: "14px", borderRadius: 50,
-        background: pctUsed > 100 ? "#E0E0E0" : T.grad,
-        color: pctUsed > 100 ? T.muted : T.bg,
-        border: "none", cursor: pctUsed > 100 ? "not-allowed" : "pointer",
-        fontSize: 15, fontWeight: 700, fontFamily: T.fontMain
-      }}>
-        Salvar orçamento ✓
-      </button>
     </Screen>
   );
 }
@@ -1283,6 +1382,7 @@ function ManualExpenseScreen({ onBack, onConfirm }) {
   const [nome, setNome] = useState("");
   const [valor, setValor] = useState("");
   const [categoria, setCategoria] = useState("outros");
+  const [weekId, setWeekId] = useState("s1");
   const [data, setData] = useState(() => new Date().toISOString().split("T")[0]);
 
   function confirm() {
@@ -1291,6 +1391,7 @@ function ManualExpenseScreen({ onBack, onConfirm }) {
       estabelecimento: nome,
       valor: +valor,
       categoria,
+      weekId,
       data: new Date(data + "T12:00:00").toLocaleDateString("pt-BR"),
       confianca: 100,
       motivo: "cadastro manual",
@@ -1313,6 +1414,22 @@ function ManualExpenseScreen({ onBack, onConfirm }) {
       <ScreenHeader label="Novo lançamento" title="Gasto manual" onBack={onBack} />
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+        {/* Semana */}
+        <div>
+          <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted, fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>Em qual semana?</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {WEEKS.map(w => (
+              <button key={w.id} onClick={() => setWeekId(w.id)} style={{
+                flex: 1, padding: "8px 4px", borderRadius: 12,
+                background: weekId === w.id ? T.dark : T.bg,
+                border: `1.5px solid ${weekId === w.id ? T.dark : T.border}`,
+                color: weekId === w.id ? T.bg : T.muted,
+                cursor: "pointer", fontFamily: T.fontMain, fontSize: 12, fontWeight: 600
+              }}>{w.label}</button>
+            ))}
+          </div>
+        </div>
 
         <div>
           <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted, fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>Nome / Estabelecimento</div>
@@ -1380,6 +1497,7 @@ function ManualExpenseScreen({ onBack, onConfirm }) {
 export default function App() {
   const [allData, setAllData] = useState(() => loadStorage());
   const [patterns, setPatterns] = useState(() => loadPatterns());
+  const [debtState, setDebtState] = useState(() => loadDebt());
   const [currentMonth] = useState(() => monthKey());
   const [screen, setScreen] = useState("dashboard");
 
@@ -1387,20 +1505,51 @@ export default function App() {
 
   useEffect(() => { saveStorage(allData); }, [allData]);
   useEffect(() => { savePatterns(patterns); }, [patterns]);
+  useEffect(() => { saveDebt(debtState); }, [debtState]);
 
-  function handleSetup(income, alloc) {
+  function handleSetup(income) {
     const base = initMonth(income);
-    base.alloc = alloc;
     setAllData(p => ({ ...p, [currentMonth]: base }));
+  }
+
+  function handleTogglePaid(invoiceId) {
+    setDebtState(prev => {
+      const paid = prev.paidIds.includes(invoiceId);
+      return {
+        ...prev,
+        paidIds: paid
+          ? prev.paidIds.filter(id => id !== invoiceId)
+          : [...prev.paidIds, invoiceId]
+      };
+    });
+  }
+
+  function handleUpdateWeekAlloc(weekId, catId, value) {
+    setAllData(p => {
+      const md = { ...p[currentMonth] };
+      md.weeks = { ...md.weeks };
+      md.weeks[weekId] = {
+        ...md.weeks[weekId],
+        alloc: { ...md.weeks[weekId].alloc, [catId]: value }
+      };
+      return { ...p, [currentMonth]: md };
+    });
   }
 
   function handleConfirmReceipt(receipt) {
     const name = receipt.estabelecimento?.toLowerCase().replace(/\s+/g, "_");
     if (name) setPatterns(p => ({ ...p, [name]: receipt.categoria }));
+    const weekId = receipt.weekId || "s1";
     setAllData(p => {
       const md = { ...p[currentMonth] };
-      md.spent = { ...md.spent };
-      md.spent[receipt.categoria] = (md.spent[receipt.categoria] || 0) + receipt.valor;
+      md.weeks = { ...md.weeks };
+      md.weeks[weekId] = {
+        ...md.weeks[weekId],
+        spent: {
+          ...md.weeks[weekId].spent,
+          [receipt.categoria]: (md.weeks[weekId].spent?.[receipt.categoria] || 0) + receipt.valor
+        }
+      };
       md.receipts = [...(md.receipts || []), receipt];
       return { ...p, [currentMonth]: md };
     });
@@ -1415,20 +1564,11 @@ export default function App() {
     setScreen("report");
   }
 
-  function handleEditBudget(allocAmt) {
-    setAllData(p => {
-      const md = { ...p[currentMonth], alloc: allocAmt };
-      return { ...p, [currentMonth]: md };
-    });
-    setScreen("dashboard");
-  }
-
   if (!monthData) return <SetupScreen onSave={handleSetup} />;
   if (screen === "receipts") return <ReceiptsScreen receipts={monthData.receipts || []} onBack={() => setScreen("dashboard")} />;
   if (screen === "history") return <HistoryScreen allData={allData} onBack={() => setScreen("dashboard")} />;
   if (screen === "add") return <AddReceiptScreen onBack={() => setScreen("dashboard")} onConfirm={handleConfirmReceipt} patterns={patterns} />;
   if (screen === "manual") return <ManualExpenseScreen onBack={() => setScreen("dashboard")} onConfirm={handleConfirmReceipt} />;
-  if (screen === "budget") return <BudgetEditScreen monthData={monthData} onBack={() => setScreen("dashboard")} onSave={handleEditBudget} />;
   if (screen === "report") return <ReportScreen monthData={monthData} currentMonth={currentMonth} onBack={() => setScreen("dashboard")} />;
 
   return (
@@ -1440,6 +1580,9 @@ export default function App() {
       currentMonth={currentMonth}
       allMonths={Object.keys(allData)}
       onCloseMonth={handleCloseMonth}
+      debtState={debtState}
+      onTogglePaid={handleTogglePaid}
+      onUpdateWeekAlloc={handleUpdateWeekAlloc}
     />
   );
 }
