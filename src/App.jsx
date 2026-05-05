@@ -380,7 +380,7 @@ function Logo({ size = "sm" }) {
 }
 
 // ─── SCREEN: Setup ────────────────────────────────────────────────────────────
-function SetupScreen({ onSave }) {
+function SetupScreen({ onSave, onBack }) {
   const [salary, setSalary] = useState("");
   const [vr, setVr] = useState("");
   const [vt, setVt] = useState("");
@@ -421,8 +421,19 @@ function SetupScreen({ onSave }) {
   return (
     <Screen pb="2rem">
       <div style={{ marginBottom: 32 }}>
-        <Logo size="lg" />
-        <div style={{ marginTop: 24, background: T.dark, borderRadius: 20, padding: "20px 22px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+          {(step === 2 || onBack) && (
+            <button onClick={step === 2 ? () => setStep(1) : onBack} style={{
+              width: 40, height: 40, borderRadius: 12, background: T.bg,
+              border: `1.5px solid ${T.border}`, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
+            }}>
+              {Icons.back(T.dark)}
+            </button>
+          )}
+          <Logo size="lg" />
+        </div>
+        <div style={{ background: T.dark, borderRadius: 20, padding: "20px 22px" }}>
           <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted, fontWeight: 500, marginBottom: 6 }}>
             {step === 1 ? "Passo 1 de 2" : "Passo 2 de 2"}
           </div>
@@ -544,7 +555,7 @@ function SetupScreen({ onSave }) {
 }
 
 // ─── SCREEN: Dashboard ────────────────────────────────────────────────────────
-function Dashboard({ monthData, onAddReceipt, onNavigate, currentMonth, allMonths, onCloseMonth }) {
+function Dashboard({ monthData, onAddReceipt, onAddManual, onNavigate, currentMonth, allMonths, onCloseMonth }) {
   const { income, alloc, spent, receipts, closed } = monthData;
   const incTotal = totalIncome(income);
   const spentTotal = totalSpent(spent);
@@ -677,15 +688,24 @@ function Dashboard({ monthData, onAddReceipt, onNavigate, currentMonth, allMonth
       </div>
 
       {/* FAB */}
-      <div style={{ position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)", zIndex: 100 }}>
+      <div style={{ position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)", zIndex: 100, display: "flex", gap: 10 }}>
+        <button onClick={onAddManual} style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "14px 20px", borderRadius: 50,
+          background: T.dark, border: "none", cursor: "pointer",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.25)"
+        }}>
+          {Icons.plus(T.bg)}
+          <span style={{ fontFamily: T.fontMain, fontSize: 13, fontWeight: 700, color: T.bg }}>Manual</span>
+        </button>
         <button onClick={onAddReceipt} style={{
-          display: "flex", alignItems: "center", gap: 10,
-          padding: "14px 28px", borderRadius: 50,
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "14px 20px", borderRadius: 50,
           background: T.grad, border: "none", cursor: "pointer",
           boxShadow: "0 8px 24px rgba(204,85,0,0.4)"
         }}>
-          {Icons.plus(T.bg)}
-          <span style={{ fontFamily: T.fontMain, fontSize: 14, fontWeight: 700, color: T.bg }}>Adicionar gasto</span>
+          {Icons.camera(T.bg)}
+          <span style={{ fontFamily: T.fontMain, fontSize: 13, fontWeight: 700, color: T.bg }}>Foto</span>
         </button>
       </div>
     </Screen>
@@ -1140,6 +1160,104 @@ function ReportScreen({ monthData, currentMonth, onBack }) {
   );
 }
 
+// ─── SCREEN: Manual Expense Entry ────────────────────────────────────────────
+function ManualExpenseScreen({ onBack, onConfirm }) {
+  const [nome, setNome] = useState("");
+  const [valor, setValor] = useState("");
+  const [categoria, setCategoria] = useState("outros");
+  const [data, setData] = useState(() => new Date().toISOString().split("T")[0]);
+
+  function confirm() {
+    if (!nome || !valor || isNaN(+valor) || +valor <= 0) return;
+    onConfirm({
+      estabelecimento: nome,
+      valor: +valor,
+      categoria,
+      data: new Date(data + "T12:00:00").toLocaleDateString("pt-BR"),
+      confianca: 100,
+      motivo: "cadastro manual",
+      file: null,
+      ts: Date.now(),
+    });
+  }
+
+  const inputStyle = {
+    width: "100%", background: T.bg, border: `1.5px solid ${T.border}`,
+    borderRadius: 14, padding: "13px 16px", fontFamily: T.fontMain,
+    fontSize: 15, fontWeight: 600, color: T.dark, outline: "none",
+    boxSizing: "border-box",
+  };
+
+  const valid = nome.trim() && valor && !isNaN(+valor) && +valor > 0;
+
+  return (
+    <Screen pb="2rem">
+      <ScreenHeader label="Novo lançamento" title="Gasto manual" onBack={onBack} />
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+        <div>
+          <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted, fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>Nome / Estabelecimento</div>
+          <input
+            style={inputStyle}
+            placeholder="Ex: Mercado, Netflix, Farmácia..."
+            value={nome}
+            onChange={e => setNome(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted, fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>Valor (R$)</div>
+          <input
+            style={inputStyle}
+            type="number"
+            placeholder="0,00"
+            value={valor}
+            onChange={e => setValor(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted, fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>Data</div>
+          <input
+            style={inputStyle}
+            type="date"
+            value={data}
+            onChange={e => setData(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>Categoria</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {CATEGORIES.map(c => (
+              <button key={c.id} onClick={() => setCategoria(c.id)} style={{
+                padding: "8px 18px", borderRadius: 50, cursor: "pointer",
+                fontFamily: T.fontMain, fontSize: 12, fontWeight: 600, transition: "all 0.15s",
+                background: categoria === c.id ? c.pill.bg : "#F0F0F0",
+                color: categoria === c.id ? c.pill.color : T.muted,
+                border: `2px solid ${categoria === c.id ? c.pill.border : "transparent"}`,
+              }}>
+                {c.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <button onClick={confirm} disabled={!valid} style={{
+          width: "100%", padding: "15px", borderRadius: 50, marginTop: 8,
+          background: valid ? T.grad : "#E0E0E0",
+          color: valid ? T.bg : T.muted,
+          border: "none", cursor: valid ? "pointer" : "not-allowed",
+          fontSize: 15, fontWeight: 700, fontFamily: T.fontMain
+        }}>
+          Confirmar e descontar →
+        </button>
+      </div>
+    </Screen>
+  );
+}
+
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [allData, setAllData] = useState(() => loadStorage());
@@ -1183,12 +1301,14 @@ export default function App() {
   if (screen === "receipts") return <ReceiptsScreen receipts={monthData.receipts || []} onBack={() => setScreen("dashboard")} />;
   if (screen === "history") return <HistoryScreen allData={allData} onBack={() => setScreen("dashboard")} />;
   if (screen === "add") return <AddReceiptScreen onBack={() => setScreen("dashboard")} onConfirm={handleConfirmReceipt} patterns={patterns} />;
+  if (screen === "manual") return <ManualExpenseScreen onBack={() => setScreen("dashboard")} onConfirm={handleConfirmReceipt} />;
   if (screen === "report") return <ReportScreen monthData={monthData} currentMonth={currentMonth} onBack={() => setScreen("dashboard")} />;
 
   return (
     <Dashboard
       monthData={monthData}
       onAddReceipt={() => setScreen("add")}
+      onAddManual={() => setScreen("manual")}
       onNavigate={setScreen}
       currentMonth={currentMonth}
       allMonths={Object.keys(allData)}
