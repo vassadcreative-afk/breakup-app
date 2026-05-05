@@ -222,6 +222,50 @@ Responda APENAS em JSON válido, sem markdown:
   return JSON.parse(text.replace(/```json|```/g, "").trim());
 }
 
+function generateLocalReport(monthData, key) {
+  const inc = totalIncome(monthData.income);
+  const spent = totalSpent(monthData.spent);
+  const saved = inc - spent;
+  const pct = inc > 0 ? (spent / inc) * 100 : 0;
+  const score = Math.max(0, Math.min(100, Math.round(100 - pct * 0.8)));
+
+  const catRanking = [...CATEGORIES]
+    .map(c => ({ ...c, spent: monthData.spent[c.id] || 0, budget: monthData.alloc[c.id] || 0 }))
+    .filter(c => c.spent > 0)
+    .sort((a, b) => b.spent - a.spent);
+
+  const top = catRanking[0];
+  const overBudgetCats = catRanking.filter(c => c.budget > 0 && c.spent > c.budget);
+
+  const titles = saved >= 0
+    ? ["Mês encerrado, cartão sobreviveu 💪", "Guardou mais do que gastou, parabéns", "O término foi um sucesso este mês"]
+    : ["Ops, o cartão venceu dessa vez", "Estouro registrado, vamos refletir", "O cartão saiu na frente este mês"];
+
+  const resumos = saved >= 0
+    ? [`Você fechou ${monthLabel(key)} no azul — guardou ${fmt(saved)}. Isso é exatamente o tipo de término que a gente gosta: você terminou com os gastos antes deles terminarem com você.`,
+       `Renda de ${fmt(inc)}, gasto de ${fmt(spent)}. Sobrou ${fmt(saved)} no bolso. Continue assim e o cartão vai sentir saudade.`]
+    : [`Você gastou ${fmt(Math.abs(saved))} a mais do que ganhou em ${monthLabel(key)}. Não é o fim do mundo, mas é hora de uma conversa séria com seus hábitos.`,
+       `A renda foi ${fmt(inc)}, mas os gastos chegaram a ${fmt(spent)}. O cartão ganhou esse round — mas o próximo mês é uma nova chance.`];
+
+  return {
+    titulo: titles[Math.floor(Math.random() * titles.length)],
+    resumo: resumos[Math.floor(Math.random() * resumos.length)],
+    destaque_positivo: top ? `${top.label} foi sua maior categoria, com ${fmt(top.spent)} gastos.` : "Você manteve os gastos sob controle!",
+    destaque_negativo: overBudgetCats.length > 0
+      ? `${overBudgetCats.map(c => c.label).join(", ")} estourou${overBudgetCats.length > 1 ? "m" : ""} o orçamento.`
+      : null,
+    categoria_campeã: top?.label || "nenhuma",
+    "dica_proxímo_mes": overBudgetCats.length > 0
+      ? `Reduza o orçamento de ${overBudgetCats[0].label} ou tente gastar ${fmt(overBudgetCats[0].spent - overBudgetCats[0].budget)} a menos nessa categoria.`
+      : "Mantenha o ritmo! Tente guardar um pouco mais reservando logo no começo do mês.",
+    score,
+    emoji_do_mes: score >= 70 ? "🎉" : score >= 40 ? "😬" : "😰",
+    frases_ruptura: saved >= 0
+      ? ["A gente precisava de um tempo, mas você soube se controlar.", "Término saudável: você ficou com o dinheiro."]
+      : ["Precisamos conversar sobre seus hábitos...", "O cartão disse que precisa de espaço — e de limite."],
+  };
+}
+
 async function generateMonthlyReport(monthData, monthKey) {
   const inc = totalIncome(monthData.income);
   const spent = totalSpent(monthData.spent);
@@ -256,18 +300,24 @@ Gere um relatório mensal em JSON com EXATAMENTE esta estrutura:
 }
 Responda APENAS JSON válido, sem markdown.`;
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
-      messages: [{ role: "user", content: prompt }]
-    })
-  });
-  const data = await res.json();
-  const text = data.content?.map(b => b.text || "").join("") || "";
-  return JSON.parse(text.replace(/```json|```/g, "").trim());
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1000,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+    const data = await res.json();
+    const text = data.content?.map(b => b.text || "").join("") || "";
+    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+    if (parsed && parsed.titulo) return parsed;
+    throw new Error("invalid");
+  } catch {
+    return generateLocalReport(monthData, monthKey);
+  }
 }
 
 // ─── Shared Components ────────────────────────────────────────────────────────
@@ -577,6 +627,12 @@ function Dashboard({ monthData, onAddReceipt, onAddManual, onNavigate, currentMo
               {Icons.history(T.bg)}
             </button>
           )}
+          <button onClick={() => onNavigate("budget")} style={{
+            width: 40, height: 40, borderRadius: 12, background: T.dark,
+            border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
+          }} title="Editar orçamento">
+            {Icons.card(T.bg)}
+          </button>
           <button onClick={() => onNavigate("receipts")} style={{
             width: 40, height: 40, borderRadius: 12, background: T.dark,
             border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
@@ -1160,6 +1216,68 @@ function ReportScreen({ monthData, currentMonth, onBack }) {
   );
 }
 
+// ─── SCREEN: Edit Budget ─────────────────────────────────────────────────────
+function BudgetEditScreen({ monthData, onBack, onSave }) {
+  const incTotal = totalIncome(monthData.income);
+  const [alloc, setAlloc] = useState(() => {
+    const pcts = {};
+    CATEGORIES.forEach(c => {
+      pcts[c.id] = incTotal > 0 ? Math.round(((monthData.alloc[c.id] || 0) / incTotal) * 100) : 0;
+    });
+    return pcts;
+  });
+
+  const pctUsed = Object.values(alloc).reduce((a, v) => a + v, 0);
+
+  function setA(id, val) { setAlloc(p => ({ ...p, [id]: Math.max(0, Math.min(100, +val)) })); }
+
+  function save() {
+    const allocAmt = {};
+    CATEGORIES.forEach(c => { allocAmt[c.id] = (alloc[c.id] / 100) * incTotal; });
+    onSave(allocAmt);
+  }
+
+  return (
+    <Screen pb="2rem">
+      <ScreenHeader label="Configurações" title="Editar orçamento" onBack={onBack} />
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ fontFamily: T.fontSec, fontSize: 13, color: T.muted }}>Renda: {fmt(incTotal)}</div>
+        <div style={{ fontFamily: T.fontMain, fontSize: 14, fontWeight: 700, color: pctUsed > 100 ? T.orange : T.dark }}>{pctUsed}% alocado</div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 24 }}>
+        {CATEGORIES.map(cat => (
+          <div key={cat.id} style={{ background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: 16, padding: "14px 16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 30, height: 30, borderRadius: 9, background: T.dark, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {CatIcons[cat.id] ? CatIcons[cat.id](T.bg) : <span style={{ color: T.bg, fontSize: 12 }}>{cat.icon}</span>}
+                </div>
+                <span style={{ fontFamily: T.fontMain, fontSize: 13, fontWeight: 600, color: T.dark }}>{cat.label}</span>
+              </div>
+              <span style={{ fontFamily: T.fontMain, fontSize: 14, fontWeight: 700, color: T.dark }}>{fmt((alloc[cat.id] / 100) * incTotal)}</span>
+            </div>
+            <input type="range" min={0} max={100} step={1} value={alloc[cat.id]} onChange={e => setA(cat.id, e.target.value)}
+              style={{ width: "100%", accentColor: T.orange }} />
+            <div style={{ display: "flex", justifyContent: "flex-end", fontFamily: T.fontSec, fontSize: 11, color: T.muted }}>{alloc[cat.id]}%</div>
+          </div>
+        ))}
+      </div>
+
+      <button onClick={save} disabled={pctUsed > 100} style={{
+        width: "100%", padding: "14px", borderRadius: 50,
+        background: pctUsed > 100 ? "#E0E0E0" : T.grad,
+        color: pctUsed > 100 ? T.muted : T.bg,
+        border: "none", cursor: pctUsed > 100 ? "not-allowed" : "pointer",
+        fontSize: 15, fontWeight: 700, fontFamily: T.fontMain
+      }}>
+        Salvar orçamento ✓
+      </button>
+    </Screen>
+  );
+}
+
 // ─── SCREEN: Manual Expense Entry ────────────────────────────────────────────
 function ManualExpenseScreen({ onBack, onConfirm }) {
   const [nome, setNome] = useState("");
@@ -1297,11 +1415,20 @@ export default function App() {
     setScreen("report");
   }
 
+  function handleEditBudget(allocAmt) {
+    setAllData(p => {
+      const md = { ...p[currentMonth], alloc: allocAmt };
+      return { ...p, [currentMonth]: md };
+    });
+    setScreen("dashboard");
+  }
+
   if (!monthData) return <SetupScreen onSave={handleSetup} />;
   if (screen === "receipts") return <ReceiptsScreen receipts={monthData.receipts || []} onBack={() => setScreen("dashboard")} />;
   if (screen === "history") return <HistoryScreen allData={allData} onBack={() => setScreen("dashboard")} />;
   if (screen === "add") return <AddReceiptScreen onBack={() => setScreen("dashboard")} onConfirm={handleConfirmReceipt} patterns={patterns} />;
   if (screen === "manual") return <ManualExpenseScreen onBack={() => setScreen("dashboard")} onConfirm={handleConfirmReceipt} />;
+  if (screen === "budget") return <BudgetEditScreen monthData={monthData} onBack={() => setScreen("dashboard")} onSave={handleEditBudget} />;
   if (screen === "report") return <ReportScreen monthData={monthData} currentMonth={currentMonth} onBack={() => setScreen("dashboard")} />;
 
   return (
