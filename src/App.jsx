@@ -207,6 +207,7 @@ const CatIcons = {
 const STORAGE_KEY = "breakup_data_v3";
 const PATTERNS_KEY = "breakup_patterns_v1";
 const DEBT_KEY = "breakup_debt_v1";
+const SUBS_KEY = "breakup_subs_v1";
 
 function loadStorage() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch { return {}; } }
 function saveStorage(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
@@ -220,6 +221,8 @@ function loadDebt() {
   return { paidIds: [] };
 }
 function saveDebt(d) { localStorage.setItem(DEBT_KEY, JSON.stringify(d)); }
+function loadSubs() { try { return JSON.parse(localStorage.getItem(SUBS_KEY) || "[]"); } catch { return []; } }
+function saveSubs(s) { localStorage.setItem(SUBS_KEY, JSON.stringify(s)); }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function monthKey(date = new Date()) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`; }
@@ -250,6 +253,47 @@ const fmtShort = (v) => {
   if (Math.abs(v) >= 1000) return `R$${(v / 1000).toFixed(1)}k`;
   return fmt(v);
 };
+
+const WEIGHTS_KEY = "breakup_weights_v1";
+const WEIGHT_LEVELS = [
+  { id: "baixa",      label: "Baixa",      value: 1, color: "#A0A0A0" },
+  { id: "media",      label: "Média",      value: 2, color: T.gold },
+  { id: "alta",       label: "Alta",       value: 3, color: T.orange },
+  { id: "muito_alta", label: "Muito Alta", value: 4, color: "#CC2200" },
+];
+const DEFAULT_WEIGHTS = { contas: 2, lazer: 3, saude: 2, outros: 1 };
+
+function loadWeights() { try { return JSON.parse(localStorage.getItem(WEIGHTS_KEY) || "null") || DEFAULT_WEIGHTS; } catch { return DEFAULT_WEIGHTS; } }
+function saveWeights(w) { localStorage.setItem(WEIGHTS_KEY, JSON.stringify(w)); }
+
+// ─── Auto-split semanal (com pesos) ──────────────────────────────────────────
+// Comida = VR/4  |  Transporte = VT/4
+// Livre = Salário + extras - fatura - contas fixas
+// Livre/semana distribuído pelas freeCats proporcionalmente aos pesos
+function calcAutoAlloc(income, currentInvoiceValue, subs, weights = DEFAULT_WEIGHTS) {
+  const salary   = income.salary || 0;
+  const vr       = income.vr || 0;
+  const vt       = income.vt || 0;
+  const extras   = (income.extras || []).reduce((a, e) => a + (e.value || 0), 0);
+  const totalSubs = subs.reduce((a, s) => a + (s.value || 0), 0);
+
+  const livreTotal     = salary + extras - currentInvoiceValue - totalSubs;
+  const livrePorSemana = Math.max(0, livreTotal) / 4;
+
+  const freeCats   = ["contas", "lazer", "saude", "outros"];
+  const totalWeight = freeCats.reduce((a, id) => a + (weights[id] || 1), 0);
+
+  const alloc = {};
+  CATEGORIES.forEach(c => {
+    if (c.id === "comida")          alloc[c.id] = Math.round((vr / 4) * 100) / 100;
+    else if (c.id === "transporte") alloc[c.id] = Math.round((vt / 4) * 100) / 100;
+    else {
+      const w = weights[c.id] || 1;
+      alloc[c.id] = Math.round((livrePorSemana * w / totalWeight) * 100) / 100;
+    }
+  });
+  return alloc;
+}
 
 // ─── Shared Components ────────────────────────────────────────────────────────
 const s = {
@@ -585,8 +629,338 @@ function SetupScreen({ onSave, onBack }) {
   );
 }
 
+// ─── SCREEN: Pesos / Prioridades ─────────────────────────────────────────────
+function WeightsScreen({ weights, income, currentInvoiceValue, subs, onSave, onBack }) {
+  const [w, setW] = useState({ ...weights });
+
+  const freeCats = CATEGORIES.filter(c => c.id !== "comida" && c.id !== "transporte");
+  const totalWeight = freeCats.reduce((a, c) => a + (w[c.id] || 1), 0);
+
+  // Preview do cálculo
+  const salary  = income.salary || 0;
+  const vr      = income.vr || 0;
+  const vt      = income.vt || 0;
+  const extras  = (income.extras || []).reduce((a, e) => a + (e.value || 0), 0);
+  const totalSubs = subs.reduce((a, s) => a + (s.value || 0), 0);
+  const livreTotal = Math.max(0, salary + extras - currentInvoiceValue - totalSubs);
+  const livreSemana = livreTotal / 4;
+
+  function preview(catId) {
+    return Math.round((livreSemana * (w[catId] || 1) / totalWeight) * 100) / 100;
+  }
+
+  return (
+    <Screen pb="2rem">
+      <ScreenHeader label="Distribuição inteligente" title="Prioridades" onBack={onBack} />
+
+      {/* Explicação */}
+      <div style={{ background: "#FFF8E0", border: `1.5px solid ${T.gold}`, borderRadius: 16, padding: "14px 16px", marginBottom: 20 }}>
+        <div style={{ fontFamily: T.fontSec, fontSize: 13, color: "#7A5900", lineHeight: 1.6 }}>
+          ✨ Defina a prioridade de cada categoria. Categorias com prioridade maior recebem uma fatia maior do dinheiro livre por semana.
+          <br/><b>Comida</b> e <b>Transporte</b> já usam VR e VT diretamente.
+        </div>
+      </div>
+
+      {/* VR / VT preview */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
+        {[
+          { label: "Comida / semana", val: (vr / 4), icon: "🥗", note: "VR ÷ 4" },
+          { label: "Transporte / sem.", val: (vt / 4), icon: "🚌", note: "VT ÷ 4" },
+        ].map(({ label, val, icon, note }) => (
+          <div key={label} style={{ background: T.dark, borderRadius: 16, padding: "14px 16px" }}>
+            <div style={{ fontSize: 20, marginBottom: 6 }}>{icon}</div>
+            <div style={{ fontFamily: T.fontMain, fontSize: 16, fontWeight: 700, color: T.bg }}>{fmt(Math.round(val * 100) / 100)}</div>
+            <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted, marginTop: 2 }}>{label}</div>
+            <div style={{ fontFamily: T.fontSec, fontSize: 10, color: "#555", marginTop: 1 }}>{note}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Livre por semana */}
+      <div style={{ background: T.grad, borderRadius: 16, padding: "14px 18px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <div style={{ fontFamily: T.fontSec, fontSize: 11, color: "rgba(255,255,255,0.7)" }}>Livre por semana para distribuir</div>
+          <div style={{ fontFamily: T.fontMain, fontSize: 22, fontWeight: 800, color: T.bg }}>{fmt(Math.round(livreSemana * 100) / 100)}</div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontFamily: T.fontSec, fontSize: 10, color: "rgba(255,255,255,0.6)" }}>livre total</div>
+          <div style={{ fontFamily: T.fontMain, fontSize: 14, fontWeight: 600, color: T.bg }}>{fmt(livreTotal)}</div>
+        </div>
+      </div>
+
+      {/* Sliders por categoria */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 24 }}>
+        {freeCats.map(cat => {
+          const level = WEIGHT_LEVELS.find(l => l.value === (w[cat.id] || 1)) || WEIGHT_LEVELS[0];
+          const pct = ((w[cat.id] || 1) / totalWeight) * 100;
+
+          return (
+            <div key={cat.id} style={{ ...s.card }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 10, background: T.dark, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {CatIcons[cat.id] ? CatIcons[cat.id](T.bg) : null}
+                  </div>
+                  <div>
+                    <div style={{ fontFamily: T.fontMain, fontSize: 14, fontWeight: 600, color: T.dark }}>{cat.label}</div>
+                    <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted }}>{pct.toFixed(0)}% do livre</div>
+                  </div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontFamily: T.fontMain, fontSize: 15, fontWeight: 700, color: T.dark }}>{fmt(preview(cat.id))}</div>
+                  <div style={{ fontFamily: T.fontSec, fontSize: 10, color: level.color, fontWeight: 700 }}>{level.label}</div>
+                </div>
+              </div>
+
+              {/* 4 botões de nível */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+                {WEIGHT_LEVELS.map(lvl => {
+                  const active = (w[cat.id] || 1) === lvl.value;
+                  return (
+                    <button key={lvl.id} onClick={() => setW(prev => ({ ...prev, [cat.id]: lvl.value }))} style={{
+                      padding: "8px 4px", borderRadius: 10, cursor: "pointer",
+                      background: active ? lvl.color : "#F0F0F0",
+                      color: active ? "#fff" : T.muted,
+                      border: active ? `2px solid ${lvl.color}` : "2px solid transparent",
+                      fontFamily: T.fontMain, fontSize: 11, fontWeight: 700,
+                      transition: "all 0.15s"
+                    }}>
+                      {lvl.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Mini barra visual da fatia */}
+              <div style={{ height: 6, borderRadius: 50, background: "#EBEBEB", marginTop: 10, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${pct}%`, background: level.color, borderRadius: 50, transition: "width 0.3s ease" }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <button onClick={() => { onSave(w); onBack(); }} style={{
+        width: "100%", padding: "15px", borderRadius: 50,
+        background: T.grad, color: T.bg, border: "none",
+        cursor: "pointer", fontSize: 15, fontWeight: 700, fontFamily: T.fontMain
+      }}>
+        Salvar prioridades ✓
+      </button>
+    </Screen>
+  );
+}
+
+// ─── SCREEN: Edit Income ─────────────────────────────────────────────────────
+function EditIncomeScreen({ income, onSave, onBack }) {
+  const [salary, setSalary] = useState(String(income.salary || ""));
+  const [vr, setVr]         = useState(String(income.vr || ""));
+  const [vt, setVt]         = useState(String(income.vt || ""));
+  const [extras, setExtras] = useState(income.extras || []);
+  const [extraLabel, setExtraLabel] = useState("");
+  const [extraVal, setExtraVal]     = useState("");
+
+  const total = (+salary||0) + (+vr||0) + (+vt||0) + extras.reduce((a,e)=>a+(e.value||0),0);
+
+  function addExtra() {
+    if (!extraLabel || !extraVal) return;
+    setExtras(p => [...p, { label: extraLabel, value: +extraVal }]);
+    setExtraLabel(""); setExtraVal("");
+  }
+
+  const inputStyle = {
+    width: "100%", background: T.bg, border: `1.5px solid ${T.border}`,
+    borderRadius: 14, padding: "13px 16px", fontFamily: T.fontMain,
+    fontSize: 15, fontWeight: 600, color: T.dark, outline: "none",
+  };
+
+  return (
+    <Screen pb="2rem">
+      <ScreenHeader label="Renda do mês" title="Editar entrada" onBack={onBack} />
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
+        {[
+          { label: "Salário", icon: "💰", val: salary, set: setSalary },
+          { label: "Vale Refeição (VR)", icon: "🥗", val: vr, set: setVr },
+          { label: "Vale Transporte (VT)", icon: "🚌", val: vt, set: setVt },
+        ].map(({ label, icon, val, set }) => (
+          <div key={label} style={{ background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: 16, padding: "14px 18px" }}>
+            <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted, fontWeight: 500, marginBottom: 4 }}>{icon} {label}</div>
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <span style={{ fontFamily: T.fontMain, fontSize: 13, color: T.muted, marginRight: 4 }}>R$</span>
+              <input type="number" value={val} onChange={e => set(e.target.value)} placeholder="0,00"
+                style={{ flex: 1, fontSize: 20, fontWeight: 700, color: T.dark, border: "none", background: "transparent", outline: "none", fontFamily: T.fontMain }} />
+            </div>
+          </div>
+        ))}
+
+        {extras.map((e, i) => (
+          <div key={i} style={{ background: "#FFF8E0", border: `1.5px solid #FFD700`, borderRadius: 16, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div>
+              <div style={{ fontFamily: T.fontSec, fontSize: 11, color: "#A07000" }}>✨ {e.label}</div>
+              <div style={{ fontFamily: T.fontMain, fontSize: 16, fontWeight: 700, color: T.dark }}>{fmt(e.value)}</div>
+            </div>
+            <button onClick={() => setExtras(p => p.filter((_, j) => j !== i))}
+              style={{ background: "none", border: "none", cursor: "pointer", color: T.muted, fontSize: 22 }}>×</button>
+          </div>
+        ))}
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <input value={extraLabel} onChange={e => setExtraLabel(e.target.value)} placeholder="Renda extra (ex: freelance)"
+            style={{ ...inputStyle, fontSize: 13, fontWeight: 500, padding: "11px 14px", flex: 1 }} />
+          <input type="number" value={extraVal} onChange={e => setExtraVal(e.target.value)} placeholder="R$"
+            style={{ ...inputStyle, fontSize: 13, fontWeight: 500, padding: "11px 14px", width: 90 }} />
+          <button onClick={addExtra} style={{
+            padding: "11px 16px", borderRadius: 14, background: T.dark,
+            color: T.bg, border: "none", cursor: "pointer", fontSize: 18, fontWeight: 700
+          }}>+</button>
+        </div>
+      </div>
+
+      {total > 0 && (
+        <div style={{ background: T.grad, borderRadius: 20, padding: "18px 22px", marginBottom: 20 }}>
+          <div style={{ fontFamily: T.fontSec, fontSize: 11, color: "rgba(255,255,255,0.75)", marginBottom: 4 }}>nova renda total</div>
+          <div style={{ fontFamily: T.fontMain, fontSize: 28, fontWeight: 800, color: T.bg }}>{fmt(total)}</div>
+        </div>
+      )}
+
+      <button onClick={() => onSave({ salary: +salary, vr: +vr, vt: +vt, extras })}
+        style={{
+          width: "100%", padding: "15px", borderRadius: 50,
+          background: T.grad, color: T.bg, border: "none",
+          cursor: "pointer", fontSize: 15, fontWeight: 700, fontFamily: T.fontMain
+        }}>
+        Salvar renda ✓
+      </button>
+    </Screen>
+  );
+}
+
+// ─── SCREEN: Subscriptions / Contas Fixas ────────────────────────────────────
+const SUB_CATS = [
+  { id: "streaming",  label: "Streaming",   emoji: "📺" },
+  { id: "saude",      label: "Saúde",        emoji: "💊" },
+  { id: "moradia",    label: "Moradia",       emoji: "🏠" },
+  { id: "educacao",   label: "Educação",      emoji: "📚" },
+  { id: "internet",   label: "Internet/Tel",  emoji: "📡" },
+  { id: "outro",      label: "Outro",         emoji: "📌" },
+];
+
+function SubscriptionsScreen({ subs, onSave, onBack }) {
+  const [list, setList] = useState(subs);
+  const [nome, setNome]   = useState("");
+  const [valor, setValor] = useState("");
+  const [catId, setCatId] = useState("outro");
+
+  const total = list.reduce((a, s) => a + (s.value || 0), 0);
+
+  function add() {
+    if (!nome || !valor || isNaN(+valor) || +valor <= 0) return;
+    setList(p => [...p, { id: Date.now(), name: nome, value: +valor, cat: catId }]);
+    setNome(""); setValor("");
+  }
+
+  function remove(id) { setList(p => p.filter(s => s.id !== id)); }
+
+  const inputStyle = {
+    background: T.bg, border: `1.5px solid ${T.border}`,
+    borderRadius: 14, padding: "12px 14px", fontFamily: T.fontMain,
+    fontSize: 14, fontWeight: 600, color: T.dark, outline: "none",
+  };
+
+  return (
+    <Screen pb="2rem">
+      <ScreenHeader label="Gastos fixos" title="Assinaturas & Contas" onBack={() => { onSave(list); onBack(); }} />
+
+      {/* Total */}
+      {total > 0 && (
+        <div style={{ background: T.dark, borderRadius: 20, padding: "16px 20px", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>Total mensal fixo</div>
+          <div style={{ fontFamily: T.fontMain, fontSize: 20, fontWeight: 800, color: T.bg }}>{fmt(total)}</div>
+        </div>
+      )}
+
+      {/* Lista existente */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+        {list.length === 0 && (
+          <div style={{ textAlign: "center", padding: "32px 0", color: T.muted, fontFamily: T.fontSec, fontSize: 13 }}>
+            Nenhuma conta fixa ainda.<br/>Adicione abaixo 👇
+          </div>
+        )}
+        {list.map(sub => {
+          const sc = SUB_CATS.find(s => s.id === sub.cat) || SUB_CATS[5];
+          return (
+            <div key={sub.id} style={{ ...s.card, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: "#F0F0F0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
+                  {sc.emoji}
+                </div>
+                <div>
+                  <div style={{ fontFamily: T.fontMain, fontSize: 13, fontWeight: 600, color: T.dark }}>{sub.name}</div>
+                  <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted }}>{sc.label}</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ fontFamily: T.fontMain, fontSize: 14, fontWeight: 700, color: T.dark }}>{fmt(sub.value)}</div>
+                <button onClick={() => remove(sub.id)} style={{
+                  width: 28, height: 28, borderRadius: 8, background: "#FFF0E8",
+                  border: `1px solid ${T.orange}`, cursor: "pointer",
+                  color: T.orange, fontSize: 16, lineHeight: 1,
+                  display: "flex", alignItems: "center", justifyContent: "center"
+                }}>×</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Formulário de adição */}
+      <div style={{ background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: 20, padding: "16px 18px" }}>
+        <div style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted, fontWeight: 600, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          Nova conta / assinatura
+        </div>
+
+        {/* Categoria */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+          {SUB_CATS.map(sc => (
+            <button key={sc.id} onClick={() => setCatId(sc.id)} style={{
+              padding: "6px 12px", borderRadius: 50, cursor: "pointer",
+              background: catId === sc.id ? T.dark : "#F0F0F0",
+              color: catId === sc.id ? T.bg : T.muted,
+              border: "none", fontFamily: T.fontMain, fontSize: 12, fontWeight: 600,
+              display: "flex", alignItems: "center", gap: 4
+            }}>
+              <span>{sc.emoji}</span> {sc.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Netflix, Aluguel..."
+            style={{ ...inputStyle, flex: 1 }} />
+          <input type="number" value={valor} onChange={e => setValor(e.target.value)} placeholder="R$"
+            style={{ ...inputStyle, width: 90 }}
+            onKeyDown={e => e.key === "Enter" && add()} />
+          <button onClick={add} style={{
+            padding: "12px 16px", borderRadius: 14, background: T.dark,
+            color: T.bg, border: "none", cursor: "pointer", fontSize: 18, fontWeight: 700
+          }}>+</button>
+        </div>
+      </div>
+
+      <button onClick={() => { onSave(list); onBack(); }} style={{
+        width: "100%", padding: "15px", borderRadius: 50, marginTop: 20,
+        background: T.grad, color: T.bg, border: "none",
+        cursor: "pointer", fontSize: 15, fontWeight: 700, fontFamily: T.fontMain
+      }}>
+        Salvar e voltar ✓
+      </button>
+    </Screen>
+  );
+}
+
 // ─── SCREEN: Dashboard ────────────────────────────────────────────────────────
-function Dashboard({ monthData, onAddReceipt, onAddManual, onNavigate, currentMonth, allMonths, onCloseMonth, debtState, onTogglePaid, onUpdateWeekAlloc }) {
+function Dashboard({ monthData, onAddReceipt, onAddManual, onNavigate, currentMonth, allMonths, onCloseMonth, debtState, onTogglePaid, onUpdateWeekAlloc, onUpdateWeekSpent, subs, onAutoSplit }) {
   const { income, weeks, receipts, closed } = monthData;
   const incTotal = totalIncome(income);
   const spentTotal = totalMonthSpent(weeks);
@@ -603,6 +977,16 @@ function Dashboard({ monthData, onAddReceipt, onAddManual, onNavigate, currentMo
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <Logo />
         <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => onNavigate("subs")} style={{
+            width: 40, height: 40, borderRadius: 12, background: T.bg,
+            border: `1.5px solid ${T.border}`, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+            title: "Contas fixas"
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M21 4H3a1 1 0 00-1 1v14a1 1 0 001 1h18a1 1 0 001-1V5a1 1 0 00-1-1z" fill={T.dark}/>
+              <path d="M7 9h10M7 13h7" stroke={T.bg} strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </button>
           {allMonths.length > 1 && (
             <button onClick={() => onNavigate("history")} style={{
               width: 40, height: 40, borderRadius: 12, background: T.dark,
@@ -625,15 +1009,21 @@ function Dashboard({ monthData, onAddReceipt, onAddManual, onNavigate, currentMo
         {monthLabel(currentMonth)}
       </div>
 
-      {/* Hero card mensal */}
-      <div style={{
+      {/* Hero card mensal — clicável para editar renda */}
+      <div onClick={() => onNavigate("editIncome")} style={{
         background: saved >= 0 ? T.grad : T.dark,
         borderRadius: 24, padding: "22px 24px", marginBottom: 14,
-        position: "relative", overflow: "hidden"
+        position: "relative", overflow: "hidden", cursor: "pointer"
       }}>
         <div style={{ position: "absolute", right: -20, top: -20, opacity: 0.1, transform: "rotate(20deg)" }}>
           {Icons.scissors(T.bg)}
         </div>
+        {/* Edit badge */}
+        <div style={{ position: "absolute", top: 14, right: 16, background: "rgba(255,255,255,0.15)", borderRadius: 50, padding: "3px 10px", display: "flex", alignItems: "center", gap: 4 }}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round"/></svg>
+          <span style={{ fontFamily: T.fontSec, fontSize: 10, color: "rgba(255,255,255,0.7)", fontWeight: 600 }}>editar</span>
+        </div>
+
         <div style={{ fontFamily: T.fontSec, fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.75)", marginBottom: 4 }}>
           {saved >= 0 ? "no mês você guardou" : "no mês você estourou"}
         </div>
@@ -649,6 +1039,12 @@ function Dashboard({ monthData, onAddReceipt, onAddManual, onNavigate, currentMo
             <div style={{ fontFamily: T.fontSec, fontSize: 10, color: "rgba(255,255,255,0.5)", marginBottom: 2 }}>renda</div>
             <div style={{ fontFamily: T.fontMain, fontSize: 16, fontWeight: 700, color: T.bg }}>{fmt(incTotal)}</div>
           </div>
+          {subs.length > 0 && (
+            <div>
+              <div style={{ fontFamily: T.fontSec, fontSize: 10, color: "rgba(255,255,255,0.5)", marginBottom: 2 }}>fixos/mês</div>
+              <div style={{ fontFamily: T.fontMain, fontSize: 16, fontWeight: 700, color: T.bg }}>{fmt(subs.reduce((a,s)=>a+s.value,0))}</div>
+            </div>
+          )}
           <div style={{ marginLeft: "auto", textAlign: "right" }}>
             <div style={{ fontFamily: T.fontSec, fontSize: 10, color: "rgba(255,255,255,0.5)", marginBottom: 2 }}>usado</div>
             <div style={{ fontFamily: T.fontMain, fontSize: 16, fontWeight: 700, color: saved >= 0 ? T.bg : T.orange }}>{pctSpent.toFixed(0)}%</div>
@@ -682,6 +1078,26 @@ function Dashboard({ monthData, onAddReceipt, onAddManual, onNavigate, currentMo
         </button>
       )}
 
+      {/* Divisão automática */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <button onClick={onAutoSplit} style={{
+          flex: 1, padding: "12px", borderRadius: 50,
+          background: "#FFF8E0", border: `1.5px solid ${T.gold}`,
+          color: "#7A5900", cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: T.fontMain,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 6
+        }}>
+          ✨ Distribuir automaticamente
+        </button>
+        <button onClick={() => onNavigate("weights")} style={{
+          width: 46, height: 46, borderRadius: 50, flexShrink: 0,
+          background: "#FFF8E0", border: `1.5px solid ${T.gold}`,
+          color: "#7A5900", cursor: "pointer", fontSize: 18,
+          display: "flex", alignItems: "center", justifyContent: "center"
+        }} title="Configurar prioridades">
+          ⚖️
+        </button>
+      </div>
+
       {/* Tabs de semanas */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}>
         {WEEKS.map(w => {
@@ -709,6 +1125,7 @@ function Dashboard({ monthData, onAddReceipt, onAddManual, onNavigate, currentMo
         weekId={activeWeek}
         weekData={weekData}
         onUpdateAlloc={(catId, val) => onUpdateWeekAlloc(activeWeek, catId, val)}
+        onUpdateSpent={(catId, val) => onUpdateWeekSpent(activeWeek, catId, val)}
       />
 
       {/* FAB */}
@@ -737,21 +1154,66 @@ function Dashboard({ monthData, onAddReceipt, onAddManual, onNavigate, currentMo
 }
 
 // ─── COMPONENT: Categorias da Semana ─────────────────────────────────────────
-function WeekCategories({ weekId, weekData, onUpdateAlloc }) {
+function WeekCategories({ weekId, weekData, onUpdateAlloc, onUpdateSpent }) {
   const { alloc = {}, spent = {} } = weekData;
-  // Estado local para edição do orçamento por categoria
-  const [editingCat, setEditingCat] = useState(null);
+  // editing: { catId, field: "alloc" | "spent" }
+  const [editing, setEditing] = useState(null);
   const [editVal, setEditVal] = useState("");
 
-  function startEdit(catId) {
-    setEditingCat(catId);
-    setEditVal(alloc[catId] ? String(alloc[catId]) : "");
+  function startEdit(catId, field) {
+    setEditing({ catId, field });
+    const current = field === "alloc" ? (alloc[catId] || 0) : (spent[catId] || 0);
+    setEditVal(current > 0 ? String(current) : "");
   }
 
-  function commitEdit(catId) {
+  function commitEdit() {
+    if (!editing) return;
     const v = parseFloat(editVal.replace(",", "."));
-    if (!isNaN(v) && v >= 0) onUpdateAlloc(catId, v);
-    setEditingCat(null);
+    if (!isNaN(v) && v >= 0) {
+      if (editing.field === "alloc") onUpdateAlloc(editing.catId, v);
+      else onUpdateSpent(editing.catId, v);
+    }
+    setEditing(null);
+  }
+
+  function isEditingField(catId, field) {
+    return editing?.catId === catId && editing?.field === field;
+  }
+
+  function EditableField({ catId, field, value, placeholder, color, bgColor, borderColor }) {
+    const active = isEditingField(catId, field);
+    if (active) {
+      return (
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+          <span style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted }}>R$</span>
+          <input
+            autoFocus
+            type="number"
+            value={editVal}
+            onChange={e => setEditVal(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={e => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") setEditing(null); }}
+            style={{
+              width: 72, fontSize: 13, fontWeight: 700, color,
+              border: `1.5px solid ${borderColor}`, borderRadius: 8, padding: "3px 7px",
+              fontFamily: T.fontMain, background: bgColor, outline: "none"
+            }}
+          />
+        </div>
+      );
+    }
+    return (
+      <button onClick={() => startEdit(catId, field)} style={{
+        fontFamily: T.fontMain, fontSize: field === "spent" ? 15 : 11,
+        fontWeight: field === "spent" ? 700 : 400,
+        color: value > 0 ? color : (field === "alloc" ? T.orange : T.muted),
+        background: "none", border: "none", cursor: "pointer", padding: 0,
+        textAlign: field === "spent" ? "right" : "left",
+        textDecoration: "none",
+      }}>
+        {value > 0 ? (field === "spent" ? fmt(value) : `limite ${fmt(value)}`) : (field === "spent" ? "R$ 0,00" : "✏️ definir limite")}
+      </button>
+    );
   }
 
   return (
@@ -762,7 +1224,6 @@ function WeekCategories({ weekId, weekData, onUpdateAlloc }) {
         const pct = budget > 0 ? (used / budget) * 100 : 0;
         const remaining = budget - used;
         const overBudget = used > budget && budget > 0;
-        const isEditing = editingCat === cat.id;
 
         return (
           <div key={cat.id} style={{
@@ -776,41 +1237,26 @@ function WeekCategories({ weekId, weekData, onUpdateAlloc }) {
                   {CatIcons[cat.id] ? CatIcons[cat.id](T.bg) : null}
                 </div>
                 <div>
-                  <div style={{ fontFamily: T.fontMain, fontSize: 13, fontWeight: 600, color: T.dark }}>{cat.label}</div>
-                  {/* Campo editável do orçamento */}
-                  {isEditing ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
-                      <span style={{ fontFamily: T.fontSec, fontSize: 11, color: T.muted }}>R$</span>
-                      <input
-                        autoFocus
-                        type="number"
-                        value={editVal}
-                        onChange={e => setEditVal(e.target.value)}
-                        onBlur={() => commitEdit(cat.id)}
-                        onKeyDown={e => { if (e.key === "Enter") commitEdit(cat.id); if (e.key === "Escape") setEditingCat(null); }}
-                        style={{
-                          width: 80, fontSize: 12, fontWeight: 600, color: T.orange,
-                          border: `1px solid ${T.orange}`, borderRadius: 6, padding: "2px 6px",
-                          fontFamily: T.fontMain, background: "#FFF0E8", outline: "none"
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    <button onClick={() => startEdit(cat.id)} style={{
-                      fontFamily: T.fontSec, fontSize: 11, color: budget > 0 ? T.muted : T.orange,
-                      background: "none", border: "none", cursor: "pointer", padding: 0, marginTop: 2,
-                      textAlign: "left", fontWeight: budget > 0 ? 400 : 600
-                    }}>
-                      {budget > 0 ? `limite ${fmt(budget)}` : "✏️ definir limite"}
-                    </button>
-                  )}
+                  <div style={{ fontFamily: T.fontMain, fontSize: 13, fontWeight: 600, color: T.dark, marginBottom: 2 }}>{cat.label}</div>
+                  {/* Limite editável */}
+                  <EditableField
+                    catId={cat.id} field="alloc" value={budget}
+                    color={T.muted} bgColor="#F5F5F5" borderColor={T.border}
+                  />
                 </div>
               </div>
+
+              {/* Valor gasto editável */}
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontFamily: T.fontMain, fontSize: 15, fontWeight: 700, color: overBudget ? T.orange : T.dark }}>{fmt(used)}</div>
+                <EditableField
+                  catId={cat.id} field="spent" value={used}
+                  color={overBudget ? T.orange : T.dark}
+                  bgColor={overBudget ? "#FFF0E8" : "#F5F5F5"}
+                  borderColor={overBudget ? T.orange : T.border}
+                />
                 {budget > 0 && (
-                  <div style={{ fontFamily: T.fontSec, fontSize: 11, fontWeight: 500, color: overBudget ? T.orange : "#4CAF50" }}>
-                    {overBudget ? `+${fmt(used - budget)}` : `${fmt(remaining)} rest.`}
+                  <div style={{ fontFamily: T.fontSec, fontSize: 11, fontWeight: 500, color: overBudget ? T.orange : "#4CAF50", marginTop: 2 }}>
+                    {overBudget ? `+${fmt(used - budget)} acima` : `${fmt(remaining)} rest.`}
                   </div>
                 )}
               </div>
@@ -1495,43 +1941,76 @@ function ManualExpenseScreen({ onBack, onConfirm }) {
 
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [allData, setAllData] = useState(() => loadStorage());
-  const [patterns, setPatterns] = useState(() => loadPatterns());
+  const [allData, setAllData]     = useState(() => loadStorage());
+  const [patterns, setPatterns]   = useState(() => loadPatterns());
   const [debtState, setDebtState] = useState(() => loadDebt());
-  const [currentMonth] = useState(() => monthKey());
-  const [screen, setScreen] = useState("dashboard");
+  const [subs, setSubs]           = useState(() => loadSubs());
+  const [weights, setWeights]     = useState(() => loadWeights());
+  const [currentMonth]            = useState(() => monthKey());
+  const [screen, setScreen]       = useState("dashboard");
 
   const monthData = allData[currentMonth];
 
-  useEffect(() => { saveStorage(allData); }, [allData]);
-  useEffect(() => { savePatterns(patterns); }, [patterns]);
-  useEffect(() => { saveDebt(debtState); }, [debtState]);
+  useEffect(() => { saveStorage(allData); },   [allData]);
+  useEffect(() => { savePatterns(patterns); },  [patterns]);
+  useEffect(() => { saveDebt(debtState); },     [debtState]);
+  useEffect(() => { saveSubs(subs); },          [subs]);
+  useEffect(() => { saveWeights(weights); },    [weights]);
 
+  // ── Fatura do mês atual no Nubank ─────────────────────────────────────────
+  // Mapeia mês atual para a fatura correspondente
+  const MONTH_TO_INVOICE = { "06": "jun", "07": "jul", "08": "ago", "09": "set", "10": "out", "11": "nov", "12": "dez", "01": "jan" };
+  const currentMonthNum  = currentMonth.split("-")[1]; // "05", "06", etc.
+  const invoiceId        = MONTH_TO_INVOICE[currentMonthNum];
+  const currentInvoice   = invoiceId ? NUBANK_INVOICES.find(i => i.id === invoiceId) : null;
+  const currentInvoiceValue = currentInvoice && !debtState.paidIds.includes(invoiceId)
+    ? currentInvoice.value : 0;
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
   function handleSetup(income) {
-    const base = initMonth(income);
-    setAllData(p => ({ ...p, [currentMonth]: base }));
+    setAllData(p => ({ ...p, [currentMonth]: initMonth(income) }));
+  }
+
+  function handleUpdateIncome(income) {
+    setAllData(p => ({
+      ...p,
+      [currentMonth]: { ...p[currentMonth], income }
+    }));
+    setScreen("dashboard");
   }
 
   function handleTogglePaid(invoiceId) {
     setDebtState(prev => {
       const paid = prev.paidIds.includes(invoiceId);
-      return {
-        ...prev,
-        paidIds: paid
-          ? prev.paidIds.filter(id => id !== invoiceId)
-          : [...prev.paidIds, invoiceId]
-      };
+      return { ...prev, paidIds: paid ? prev.paidIds.filter(id => id !== invoiceId) : [...prev.paidIds, invoiceId] };
     });
   }
 
   function handleUpdateWeekAlloc(weekId, catId, value) {
     setAllData(p => {
-      const md = { ...p[currentMonth] };
-      md.weeks = { ...md.weeks };
-      md.weeks[weekId] = {
-        ...md.weeks[weekId],
-        alloc: { ...md.weeks[weekId].alloc, [catId]: value }
-      };
+      const md = { ...p[currentMonth], weeks: { ...p[currentMonth].weeks } };
+      md.weeks[weekId] = { ...md.weeks[weekId], alloc: { ...md.weeks[weekId].alloc, [catId]: value } };
+      return { ...p, [currentMonth]: md };
+    });
+  }
+
+  function handleUpdateWeekSpent(weekId, catId, value) {
+    setAllData(p => {
+      const md = { ...p[currentMonth], weeks: { ...p[currentMonth].weeks } };
+      md.weeks[weekId] = { ...md.weeks[weekId], spent: { ...md.weeks[weekId].spent, [catId]: value } };
+      return { ...p, [currentMonth]: md };
+    });
+  }
+
+  // Distribui limites automaticamente em todas as semanas
+  function handleAutoSplit() {
+    const income = monthData?.income || {};
+    const alloc  = calcAutoAlloc(income, currentInvoiceValue, subs, weights);
+    setAllData(p => {
+      const md = { ...p[currentMonth], weeks: { ...p[currentMonth].weeks } };
+      WEEKS.forEach(w => {
+        md.weeks[w.id] = { ...md.weeks[w.id], alloc: { ...alloc } };
+      });
       return { ...p, [currentMonth]: md };
     });
   }
@@ -1541,14 +2020,10 @@ export default function App() {
     if (name) setPatterns(p => ({ ...p, [name]: receipt.categoria }));
     const weekId = receipt.weekId || "s1";
     setAllData(p => {
-      const md = { ...p[currentMonth] };
-      md.weeks = { ...md.weeks };
+      const md = { ...p[currentMonth], weeks: { ...p[currentMonth].weeks } };
       md.weeks[weekId] = {
         ...md.weeks[weekId],
-        spent: {
-          ...md.weeks[weekId].spent,
-          [receipt.categoria]: (md.weeks[weekId].spent?.[receipt.categoria] || 0) + receipt.valor
-        }
+        spent: { ...md.weeks[weekId].spent, [receipt.categoria]: (md.weeks[weekId].spent?.[receipt.categoria] || 0) + receipt.valor }
       };
       md.receipts = [...(md.receipts || []), receipt];
       return { ...p, [currentMonth]: md };
@@ -1557,19 +2032,20 @@ export default function App() {
   }
 
   function handleCloseMonth() {
-    setAllData(p => {
-      const md = { ...p[currentMonth], closed: true };
-      return { ...p, [currentMonth]: md };
-    });
+    setAllData(p => ({ ...p, [currentMonth]: { ...p[currentMonth], closed: true } }));
     setScreen("report");
   }
 
+  // ── Routing ───────────────────────────────────────────────────────────────
   if (!monthData) return <SetupScreen onSave={handleSetup} />;
-  if (screen === "receipts") return <ReceiptsScreen receipts={monthData.receipts || []} onBack={() => setScreen("dashboard")} />;
-  if (screen === "history") return <HistoryScreen allData={allData} onBack={() => setScreen("dashboard")} />;
-  if (screen === "add") return <AddReceiptScreen onBack={() => setScreen("dashboard")} onConfirm={handleConfirmReceipt} patterns={patterns} />;
-  if (screen === "manual") return <ManualExpenseScreen onBack={() => setScreen("dashboard")} onConfirm={handleConfirmReceipt} />;
-  if (screen === "report") return <ReportScreen monthData={monthData} currentMonth={currentMonth} onBack={() => setScreen("dashboard")} />;
+  if (screen === "receipts")   return <ReceiptsScreen receipts={monthData.receipts || []} onBack={() => setScreen("dashboard")} />;
+  if (screen === "history")    return <HistoryScreen allData={allData} onBack={() => setScreen("dashboard")} />;
+  if (screen === "add")        return <AddReceiptScreen onBack={() => setScreen("dashboard")} onConfirm={handleConfirmReceipt} patterns={patterns} />;
+  if (screen === "manual")     return <ManualExpenseScreen onBack={() => setScreen("dashboard")} onConfirm={handleConfirmReceipt} />;
+  if (screen === "report")     return <ReportScreen monthData={monthData} currentMonth={currentMonth} onBack={() => setScreen("dashboard")} />;
+  if (screen === "editIncome") return <EditIncomeScreen income={monthData.income || {}} onSave={handleUpdateIncome} onBack={() => setScreen("dashboard")} />;
+  if (screen === "subs")       return <SubscriptionsScreen subs={subs} onSave={setSubs} onBack={() => setScreen("dashboard")} />;
+  if (screen === "weights")    return <WeightsScreen weights={weights} income={monthData?.income || {}} currentInvoiceValue={currentInvoiceValue} subs={subs} onSave={setWeights} onBack={() => setScreen("dashboard")} />;
 
   return (
     <Dashboard
@@ -1583,6 +2059,9 @@ export default function App() {
       debtState={debtState}
       onTogglePaid={handleTogglePaid}
       onUpdateWeekAlloc={handleUpdateWeekAlloc}
+      onUpdateWeekSpent={handleUpdateWeekSpent}
+      subs={subs}
+      onAutoSplit={handleAutoSplit}
     />
   );
 }
